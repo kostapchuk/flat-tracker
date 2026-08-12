@@ -218,38 +218,51 @@ def scrape(filter_url):
 CAPTION_LIMIT = 1024
 
 
+class TelegramError(RuntimeError):
+    def __init__(self, code, description):
+        super().__init__(f"Telegram API {code}: {description}")
+        self.code = code
+        self.description = description
+
+
 def telegram_api(method, params):
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if not token or not chat_id:
-        raise RuntimeError("не заданы TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (см. .env)")
+    if not token:
+        raise RuntimeError("не задан TELEGRAM_BOT_TOKEN (см. .env)")
 
-    payload = urllib.parse.urlencode(dict(params, chat_id=chat_id)).encode()
+    payload = urllib.parse.urlencode(params).encode()
     req = urllib.request.Request(f"https://api.telegram.org/bot{token}/{method}", data=payload)
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"Telegram API {exc.code}: {exc.read().decode()[:300]}") from exc
+        body = exc.read().decode()[:300]
+        try:
+            body = json.loads(body).get("description", body)
+        except ValueError:
+            pass
+        raise TelegramError(exc.code, body) from exc
 
 
-def telegram_send(text, disable_preview=True):
+def telegram_send(text, chat_id, disable_preview=True):
     return telegram_api("sendMessage", {
+        "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": "true" if disable_preview else "false",
     })
 
 
-def telegram_send_photo(photo_url, caption):
+def telegram_send_photo(photo_url, caption, chat_id):
     return telegram_api("sendPhoto", {
+        "chat_id": chat_id,
         "photo": photo_url,
         "caption": caption,
         "parse_mode": "HTML",
     })
 
 
-def send_flat(flat, header=""):
+def send_flat(flat, chat_id, header=""):
     """Планировка фото + вся инфа подписью. Если фото не ушло — просто текстом."""
     text = (header + "\n\n" if header else "") + format_flat(flat)
     photo = flat.get("plan_image")
@@ -261,12 +274,14 @@ def send_flat(flat, header=""):
             candidates.append(photo)
         for url in candidates:
             try:
-                telegram_send_photo(url, text)
+                telegram_send_photo(url, text, chat_id)
                 return
-            except RuntimeError as exc:
+            except TelegramError as exc:
+                if exc.code == 403:  # пользователь заблокировал бота — выше разберутся
+                    raise
                 log.warning("фото не ушло (%s): %s", url, exc)
 
-    telegram_send(text, disable_preview=False)
+    telegram_send(text, chat_id, disable_preview=False)
 
 
 def esc(value):
@@ -314,6 +329,151 @@ def format_flat(flat):
 
 
 # --------------------------------------------------------------------------- #
+# подписчики и команды бота
+# --------------------------------------------------------------------------- #
+
+HELP = (
+    "Я слежу за квартирами в «Новой Боровой» и присылаю новые, как только они "
+    "появляются в продаже.\n\n"
+    "Что отслеживаю: свободные квартиры, площадь от 70 м², любой дом, "
+    "любые цена и этаж.\n\n"
+    "Команды:\n"
+    "/start — подписаться на уведомления\n"
+    "/stop — отписаться\n"
+    "/list — показать, что подходит прямо сейчас\n"
+    "/status — подписка и состояние трекера\n"
+    "/help — эта справка"
+)
+
+BOT_COMMANDS = [
+    {"command": "start", "description": "Подписаться на уведомления"},
+    {"command": "stop", "description": "Отписаться"},
+    {"command": "list", "description": "Что подходит прямо сейчас"},
+    {"command": "status", "description": "Подписка и состояние трекера"},
+    {"command": "help", "description": "Справка"},
+]
+
+
+def subscribers(state):
+    """Список chat_id получателей. Владелец из .env подписан всегда."""
+    subs = state.setdefault("subscribers", {})
+    owner = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if owner and owner not in subs:
+        subs[owner] = {"since": time.strftime("%Y-%m-%d %H:%M:%S"), "note": "владелец (из настроек)"}
+    return subs
+
+
+def broadcast(state, send, dry_run=False):
+    """send(chat_id) для каждого подписчика; кто заблокировал бота — отписывается."""
+    dropped = []
+    for chat_id in list(subscribers(state)):
+        if dry_run:
+            send(chat_id)
+            continue
+        try:
+            send(chat_id)
+        except TelegramError as exc:
+            # 403 — бот заблокирован, 400 chat not found — чат удалён
+            if exc.code in (400, 403):
+                dropped.append(chat_id)
+                log.warning("отписываем %s: %s", chat_id, exc.description)
+            else:
+                log.error("не доставлено %s: %s", chat_id, exc)
+        time.sleep(0.5)
+    for chat_id in dropped:
+        state["subscribers"].pop(chat_id, None)
+
+
+def handle_commands(state, flats):
+    """Разбирает новые сообщения боту. flats=None, если сайт не ответил."""
+    try:
+        updates = telegram_api("getUpdates", {
+            "offset": state.get("tg_offset", 0),
+            "timeout": 0,
+            "allowed_updates": '["message"]',
+        }).get("result", [])
+    except (TelegramError, urllib.error.URLError) as exc:
+        log.error("не смог забрать сообщения бота: %s", exc)
+        return
+
+    if not state.get("commands_registered"):
+        try:
+            telegram_api("setMyCommands", {"commands": json.dumps(BOT_COMMANDS)})
+            state["commands_registered"] = True
+        except TelegramError as exc:
+            log.warning("не удалось задать меню команд: %s", exc)
+
+    subs = subscribers(state)
+    for update in updates:
+        state["tg_offset"] = update["update_id"] + 1
+        message = update.get("message") or {}
+        chat = message.get("chat") or {}
+        chat_id = str(chat.get("id", ""))
+        text = (message.get("text") or "").strip()
+        if not chat_id or not text.startswith("/"):
+            continue
+
+        command = text.split()[0].split("@")[0].lower()
+        who = " ".join(x for x in (chat.get("first_name"), chat.get("last_name")) if x)
+        log.info("команда %s от %s (%s)", command, who or chat_id, chat_id)
+
+        try:
+            if command == "/start":
+                already = chat_id in subs
+                subs[chat_id] = {
+                    "since": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "name": who,
+                    "username": chat.get("username", ""),
+                }
+                if already:
+                    telegram_send("Ты уже подписан 👌\n\n" + HELP, chat_id)
+                else:
+                    telegram_send("✅ Подписал! Пришлю, как только появится новая "
+                                  "подходящая квартира.\n\n" + HELP, chat_id)
+                    if flats:
+                        telegram_send(f"Сейчас под фильтр подходит: {len(flats)}. Показываю…", chat_id)
+                        for flat in flats[:MAX_PHOTO_MESSAGES]:
+                            send_flat(flat, chat_id)
+                            time.sleep(0.5)
+
+            elif command == "/stop":
+                if subs.pop(chat_id, None):
+                    telegram_send("🔕 Отписал. Вернуться — /start", chat_id)
+                else:
+                    telegram_send("Ты и так не подписан. Подписаться — /start", chat_id)
+
+            elif command == "/list":
+                if flats is None:
+                    telegram_send("Сайт сейчас не отвечает, попробуй позже.", chat_id)
+                elif not flats:
+                    telegram_send("Сейчас нет ни одной квартиры под фильтр. "
+                                  "Как появится — сразу напишу.", chat_id)
+                else:
+                    telegram_send(f"Сейчас подходит квартир: <b>{len(flats)}</b>", chat_id)
+                    for flat in flats[:MAX_PHOTO_MESSAGES]:
+                        send_flat(flat, chat_id)
+                        time.sleep(0.5)
+                    if len(flats) > MAX_PHOTO_MESSAGES:
+                        telegram_send(f"…и ещё {len(flats) - MAX_PHOTO_MESSAGES} — "
+                                      "смотри на сайте.", chat_id)
+
+            elif command == "/status":
+                # ответ формируется прямо во время проверки, так что данные свежие
+                telegram_send(
+                    ("✅ Ты подписан" if chat_id in subs else "🔕 Ты не подписан (/start)") +
+                    f"\nВсего подписчиков: {len(subs)}" +
+                    (f"\nСейчас подходит квартир: {len(flats)} (проверено только что)"
+                     if flats is not None else "\n⚠️ Сайт сейчас не отвечает") +
+                    "\n\nПроверка идёт автоматически каждые 5 минут.", chat_id)
+
+            else:
+                telegram_send(HELP, chat_id)
+
+        except TelegramError as exc:
+            log.error("ответ на %s не доставлен: %s", command, exc)
+
+
+# --------------------------------------------------------------------------- #
 # state
 # --------------------------------------------------------------------------- #
 
@@ -340,17 +500,27 @@ def run(args):
     state = load_state()
     known = state.get("flats", {})
 
+    error = None
     try:
         flats = scrape(filter_url)
     except Exception as exc:  # сеть упала / вёрстка поехала — состояние не трогаем
+        flats, error = None, exc
+
+    # команды бота разбираем в любом случае — даже если сайт лежит
+    if not args.dry_run:
+        handle_commands(state, flats)
+
+    if error is not None:
         state["fails"] = state.get("fails", 0) + 1
         save_state(state)
-        log.error("ошибка проверки (%d подряд): %s", state["fails"], exc)
+        log.error("ошибка проверки (%d подряд): %s", state["fails"], error)
         # молчим о разовых сбоях, но о стабильной поломке сообщаем
         if state["fails"] in (3, 30) and not args.dry_run:
             try:
-                telegram_send(f"⚠️ Трекер квартир не может проверить страницу "
-                              f"({state['fails']} раза подряд):\n<code>{esc(exc)}</code>")
+                broadcast(state, lambda chat_id: telegram_send(
+                    f"⚠️ Трекер квартир не может проверить страницу "
+                    f"({state['fails']} раза подряд):\n<code>{esc(error)}</code>", chat_id))
+                save_state(state)
             except Exception as send_exc:
                 log.error("и в Telegram не ушло: %s", send_exc)
         return 1
@@ -378,8 +548,8 @@ def run(args):
                 print(f"[фото: {flat.get('plan_image') or '—'}]")
                 print(header + "\n\n" + format_flat(flat) + "\n")
             else:
-                send_flat(flat, header)
-                log.info("отправлена квартира %s (%s)", flat_id, flat.get("title"))
+                broadcast(state, lambda chat_id, f=flat: send_flat(f, chat_id, header))
+                log.info("разослана квартира %s (%s)", flat_id, flat.get("title"))
                 time.sleep(1)  # не упираемся в лимиты Telegram
 
         overflow = new_ids[MAX_PHOTO_MESSAGES:]
@@ -388,12 +558,18 @@ def run(args):
                     "\n".join(f'• <a href="{esc(current[i]["url"])}">{esc(current[i]["title"])}</a>'
                               f' — {esc(current[i].get("area"))}, {esc(money(current[i].get("price_usd"), "$"))}'
                               for i in overflow))
-            print(text) if args.dry_run else telegram_send(text)
+            if args.dry_run:
+                print(text)
+            else:
+                broadcast(state, lambda chat_id: telegram_send(text, chat_id))
 
     if gone_ids and os.environ.get("NOTIFY_REMOVED", "0") == "1":
         text = ("➖ <b>Пропали из выдачи (забронированы/проданы):</b>\n" +
                 "\n".join(f"• {esc(known[i].get('title', i))}" for i in gone_ids))
-        print(text) if args.dry_run else telegram_send(text)
+        if args.dry_run:
+            print(text)
+        else:
+            broadcast(state, lambda chat_id: telegram_send(text, chat_id))
 
     if not args.dry_run:  # прогон «вхолостую» не должен помечать квартиры как виденные
         save_state(state)
@@ -410,6 +586,8 @@ def main():
                         help="отправить тестовое сообщение и выйти")
     parser.add_argument("--list", action="store_true",
                         help="показать текущую выдачу и выйти")
+    parser.add_argument("--subscribers", action="store_true",
+                        help="показать подписчиков и выйти")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -417,8 +595,14 @@ def main():
     setup_logging(args.verbose)
 
     if args.test_telegram:
-        telegram_send("✅ Трекер квартир на связи.")
+        telegram_send("✅ Трекер квартир на связи.", os.environ["TELEGRAM_CHAT_ID"])
         print("Отправлено.")
+        return 0
+
+    if args.subscribers:
+        for chat_id, info in load_state().get("subscribers", {}).items():
+            print(f"{chat_id}  {info.get('name', '')} @{info.get('username', '')}"
+                  f"  с {info.get('since', '?')}  {info.get('note', '')}")
         return 0
 
     if args.list:

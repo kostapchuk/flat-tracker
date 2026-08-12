@@ -6,7 +6,8 @@ name: flat-tracker
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # каждые 15 минут (GitHub может задержать запуск на 5–20 мин)
+    - cron: "*/5 * * * *"    # каждые 5 минут — это же и скорость ответа на команды бота
+                             # (GitHub может задержать запуск на 5–20 минут)
   workflow_dispatch:          # и кнопка «Run workflow» для проверки вручную
 
 # чтобы шаг ниже мог закоммитить обновлённый state.json
@@ -35,15 +36,24 @@ jobs:
           git config user.name "flat-tracker"
           git config user.email "flat-tracker@users.noreply.github.com"
           git add state.json
-          if git diff --staged --quiet; then
+          # last_ok/fails меняются каждый запуск — ради них коммитить не стоит,
+          # иначе история превратится в 300 коммитов в сутки.
+          # (|| true — grep без совпадений возвращает 1, а шаг идёт с set -e)
+          meaningful=$(git diff --staged -U0 -- state.json \
+            | grep -E '^[+-]' \
+            | grep -vE '^(\+\+\+|---)' \
+            | grep -vE '"(last_ok|fails)"' || true)
+
+          if [ -n "$meaningful" ]; then
+            git commit -m "state: $(date -u +%FT%TZ)"
+            git push
+          else
             # GitHub отключает расписание в репозиториях без активности 60 дней,
-            # поэтому раз в неделю делаем пустой коммит-пульс.
+            # поэтому раз в неделю делаем пустой коммит-пульс
             age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
             if [ "$age" -gt 604800 ]; then
+              git reset -q
               git commit --allow-empty -m "heartbeat: $(date -u +%FT%TZ)"
               git push
             fi
-          else
-            git commit -m "state: $(date -u +%FT%TZ)"
-            git push
           fi

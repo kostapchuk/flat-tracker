@@ -77,5 +77,14 @@
     }
   },
   "fails": 0,
-  "last_ok": "2026-08-12 07:59:18"
+  "last_ok": "2026-08-12 11:01:17",
+  "commands_registered": true,
+  "subscribers": {
+    "536541305": {
+      "since": "2026-08-12 11:01:17",
+      "name": "Kirill Ostapchuk",
+      "username": "kostapchuk"
+    }
+  },
+  "tg_offset": 112943503
 }
