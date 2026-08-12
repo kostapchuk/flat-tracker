@@ -8,6 +8,8 @@ on:
   schedule:
     - cron: "*/5 * * * *"    # каждые 5 минут — это же и скорость ответа на команды бота
                              # (GitHub может задержать запуск на 5–20 минут)
+  repository_dispatch:        # запуск по расписанию Cloudflare
+    types: [check]
   workflow_dispatch:          # и кнопка «Run workflow» для проверки вручную
     inputs:
       ping:

@@ -7,8 +7,13 @@
  *     здесь (GET /filters), а результат отдаёт обратно: POST /broadcast
  *     (появилась квартира) и POST /retire (квартиру сняли).
  *
+ * Ещё воркер по расписанию (cron в wrangler.toml) дёргает проверку в GitHub
+ * через repository_dispatch: у Cloudflare расписание точное, а обход сайта
+ * и состояние остаются в одном экземпляре — в Actions.
+ *
  * Настройки в панели Cloudflare (Workers → Settings):
- *   Variables:  BOT_TOKEN, WEBHOOK_SECRET, BROADCAST_SECRET, OWNER_CHAT_ID, STATE_URL
+ *   Variables:  BOT_TOKEN, WEBHOOK_SECRET, BROADCAST_SECRET, OWNER_CHAT_ID,
+ *               STATE_URL, GH_TOKEN, GH_REPO
  *   KV binding: SUBS
  * При сборке из репозитория привязка и несекретные переменные берутся
  * из wrangler.toml.
@@ -515,6 +520,28 @@ async function handleRetire(env, request) {
 }
 
 // ---------------------------------------------------------------------------
+// Запуск проверки в GitHub Actions
+// ---------------------------------------------------------------------------
+
+async function triggerCheck(env) {
+  if (!env.GH_TOKEN || !env.GH_REPO) {
+    return { ok: false, error: "не заданы GH_TOKEN или GH_REPO" };
+  }
+  const response = await fetch(`https://api.github.com/repos/${env.GH_REPO}/dispatches`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${env.GH_TOKEN}`,
+      accept: "application/vnd.github+json",
+      "content-type": "application/json",
+      "user-agent": "flat-tracker-bot",
+    },
+    body: JSON.stringify({ event_type: "check" }),
+  });
+  if (response.ok) return { ok: true };
+  return { ok: false, status: response.status, error: (await response.text()).slice(0, 200) };
+}
+
+// ---------------------------------------------------------------------------
 // HTTP
 // ---------------------------------------------------------------------------
 
@@ -565,6 +592,10 @@ export default {
       return Response.json({ webhook: await webhook.json(), commands: await menu.json() });
     }
 
+    if (url.pathname === "/trigger" && authorized(env, request, url)) {
+      return Response.json(await triggerCheck(env));
+    }
+
     if (url.pathname === "/keys" && authorized(env, request, url)) {
       const listed = await env.SUBS.list();
       const names = listed.keys.map((key) => key.name);
@@ -604,5 +635,12 @@ export default {
     }
 
     return new Response("не найдено", { status: 404 });
+  },
+
+  // расписание Cloudflare: просто просим GitHub запустить проверку
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      triggerCheck(env).then((result) => console.log("cron →", JSON.stringify(result))),
+    );
   },
 };

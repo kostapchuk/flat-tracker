@@ -14,6 +14,7 @@ compatibility_date = "2026-08-01"
 # Не секретные настройки — их видно в репозитории, и это нормально
 [vars]
 OWNER_CHAT_ID = "536541305"
+GH_REPO = "kostapchuk/flat-tracker"
 STATE_URL = "https://raw.githubusercontent.com/kostapchuk/flat-tracker/main/state.json"
 
 # Хранилище подписчиков и message_id отправленных карточек.
@@ -21,3 +22,9 @@ STATE_URL = "https://raw.githubusercontent.com/kostapchuk/flat-tracker/main/stat
 [[kv_namespaces]]
 binding = "SUBS"
 id = "34fa957844dd4ad8b47ba10bd2bbf578"
+
+# Точное расписание: воркер раз в 5 минут просит GitHub запустить проверку.
+# Родной крон GitHub оставлен включённым — он ненадёжен, но и не мешает:
+# одновременные запуски воркфлоу выстраиваются в очередь, а не дублируются.
+[triggers]
+crons = ["*/5 * * * *"]
