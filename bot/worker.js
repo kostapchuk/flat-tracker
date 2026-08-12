@@ -201,7 +201,18 @@ async function saveFilters(env, chatId, filters) {
 
 /** Все фильтры всех людей — для проверялки */
 async function allFilters(env) {
-  const stored = await env.SUBS.get("index:filters");
+  let stored = await env.SUBS.get("index:filters");
+
+  // указателя ещё нет (первый запуск после смены схемы) — собираем перебором
+  // и запоминаем; дальше list уже не понадобится
+  if (stored === null) {
+    const listed = await env.SUBS.list({ prefix: "filters:" });
+    const chats = listed.keys.map((key) => key.name.slice("filters:".length));
+    stored = JSON.stringify(chats);
+    await env.SUBS.put("index:filters", stored);
+    console.log("собрал index:filters:", chats.length);
+  }
+
   const chats = stored ? JSON.parse(stored) : [];
   const filters = [];
   for (const chatId of chats) {
@@ -480,10 +491,15 @@ async function handleRetire(env, request) {
   let sent = 0;
 
   for (const flat of payload.flats) {
-    const listed = await env.SUBS.list({ prefix: `msg:${filterId}:${flat.id}:` });
+    let listed = await env.SUBS.list({ prefix: `msg:${filterId}:${flat.id}:` });
+    // сообщения, отправленные до появления фильтров, лежат под старым ключом
+    if (!listed.keys.length) {
+      listed = await env.SUBS.list({ prefix: `msg:${flat.id}:` });
+    }
 
     for (const key of listed.keys) {
-      const chatId = key.name.split(":")[3];
+      const parts = key.name.split(":");
+      const chatId = parts[parts.length - 1];
       const stored = JSON.parse(await env.SUBS.get(key.name) || "{}");
       if (!stored.messageId) continue;
 
