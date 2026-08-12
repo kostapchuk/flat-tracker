@@ -77,8 +77,8 @@
     }
   },
   "fails": 0,
-  "last_ok": "2026-08-12 08:16:58",
-  "commands_registered": true,
+  "last_ok": "2026-08-12 11:19:28",
+  "commands_registered": "[{\"command\": \"start\", \"description\": \"Подписаться на новые квартиры\"}, {\"command\": \"stop\", \"description\": \"Отписаться от уведомлений\"}, {\"command\": \"list\", \"description\": \"Что подходит прямо сейчас\"}]",
   "subscribers": {
     "536541305": {
       "since": "2026-08-12 11:01:17",

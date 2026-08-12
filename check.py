@@ -332,26 +332,28 @@ def format_flat(flat):
 # подписчики и команды бота
 # --------------------------------------------------------------------------- #
 
-HELP = (
-    "Я слежу за квартирами в «Новой Боровой» и присылаю новые, как только они "
-    "появляются в продаже.\n\n"
-    "Что отслеживаю: свободные квартиры, площадь от 70 м², любой дом, "
-    "любые цена и этаж.\n\n"
-    "Команды:\n"
-    "/start — подписаться на уведомления\n"
-    "/stop — отписаться\n"
-    "/list — показать, что подходит прямо сейчас\n"
-    "/status — подписка и состояние трекера\n"
-    "/help — эта справка"
+BOT_COMMANDS = [
+    {"command": "start", "description": "Подписаться на новые квартиры"},
+    {"command": "stop", "description": "Отписаться от уведомлений"},
+    {"command": "list", "description": "Что подходит прямо сейчас"},
+]
+
+# Постоянно работающего процесса нет: бот отвечает только в момент очередной
+# проверки сайта. Пишем об этом прямо, чтобы никто не ждал ответа за секунду.
+DELAY_NOTE = (
+    "⏳ Бот не сидит онлайн постоянно: он просыпается раз в несколько минут, "
+    "чтобы проверить сайт, и тогда же отвечает на команды. "
+    "Так что пауза до ~5 минут — это нормально, а не поломка."
 )
 
-BOT_COMMANDS = [
-    {"command": "start", "description": "Подписаться на уведомления"},
-    {"command": "stop", "description": "Отписаться"},
-    {"command": "list", "description": "Что подходит прямо сейчас"},
-    {"command": "status", "description": "Подписка и состояние трекера"},
-    {"command": "help", "description": "Справка"},
-]
+INTRO = (
+    "Слежу за квартирами в «Новой Боровой» и присылаю новые, как только они "
+    "появляются в продаже.\n\n"
+    "Что отслеживаю: свободные квартиры от 70 м², любой дом, любые цена и этаж.\n\n"
+    "/start — подписаться\n"
+    "/stop — отписаться\n"
+    "/list — что подходит прямо сейчас\n\n" + DELAY_NOTE
+)
 
 
 def subscribers(state):
@@ -396,10 +398,13 @@ def handle_commands(state, flats):
         log.error("не смог забрать сообщения бота: %s", exc)
         return
 
-    if not state.get("commands_registered"):
+    # меню перерегистрируем, когда список команд поменялся
+    commands_json = json.dumps(BOT_COMMANDS, ensure_ascii=False, sort_keys=True)
+    if state.get("commands_registered") != commands_json:
         try:
-            telegram_api("setMyCommands", {"commands": json.dumps(BOT_COMMANDS)})
-            state["commands_registered"] = True
+            telegram_api("setMyCommands", {"commands": commands_json})
+            state["commands_registered"] = commands_json
+            log.info("меню команд обновлено")
         except TelegramError as exc:
             log.warning("не удалось задать меню команд: %s", exc)
 
@@ -426,10 +431,10 @@ def handle_commands(state, flats):
                     "username": chat.get("username", ""),
                 }
                 if already:
-                    telegram_send("Ты уже подписан 👌\n\n" + HELP, chat_id)
+                    telegram_send("Ты уже подписан 👌\n\n" + INTRO, chat_id)
                 else:
                     telegram_send("✅ Подписал! Пришлю, как только появится новая "
-                                  "подходящая квартира.\n\n" + HELP, chat_id)
+                                  "подходящая квартира.\n\n" + INTRO, chat_id)
                     if flats:
                         telegram_send(f"Сейчас под фильтр подходит: {len(flats)}. Показываю…", chat_id)
                         for flat in flats[:MAX_PHOTO_MESSAGES]:
@@ -457,17 +462,8 @@ def handle_commands(state, flats):
                         telegram_send(f"…и ещё {len(flats) - MAX_PHOTO_MESSAGES} — "
                                       "смотри на сайте.", chat_id)
 
-            elif command == "/status":
-                # ответ формируется прямо во время проверки, так что данные свежие
-                telegram_send(
-                    ("✅ Ты подписан" if chat_id in subs else "🔕 Ты не подписан (/start)") +
-                    f"\nВсего подписчиков: {len(subs)}" +
-                    (f"\nСейчас подходит квартир: {len(flats)} (проверено только что)"
-                     if flats is not None else "\n⚠️ Сайт сейчас не отвечает") +
-                    "\n\nПроверка идёт автоматически каждые 5 минут.", chat_id)
-
             else:
-                telegram_send(HELP, chat_id)
+                telegram_send(INTRO, chat_id)
 
         except TelegramError as exc:
             log.error("ответ на %s не доставлен: %s", command, exc)
