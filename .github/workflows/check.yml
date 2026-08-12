@@ -27,7 +27,7 @@ jobs:
 
       - name: Проверить квартиры
         env:
-          # рассылка идёт через бота на Deno Deploy — подписчики живут там
+          # рассылка идёт через бота на Cloudflare Workers — подписчики живут там
           BOT_URL: ${{ secrets.BOT_URL }}
           BROADCAST_SECRET: ${{ secrets.BROADCAST_SECRET }}
           # запасной путь: если бот не настроен, шлём напрямую владельцу

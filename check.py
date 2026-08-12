@@ -338,7 +338,7 @@ def format_flat(flat, retired=False):
 # --------------------------------------------------------------------------- #
 
 def bot_call(path, payload):
-    """POST боту на Deno Deploy. None — если бот не настроен."""
+    """POST боту на Cloudflare Workers. None — если бот не настроен."""
     base = os.environ.get("BOT_URL", "").strip().rstrip("/")
     secret = os.environ.get("BROADCAST_SECRET", "").strip()
     if not base or not secret:
@@ -427,7 +427,7 @@ def load_state():
         return {"flats": {}, "fails": 0, "last_ok_utc": None}
     with open(STATE_FILE, encoding="utf-8") as fh:
         state = json.load(fh)
-    # подписчики и очередь сообщений переехали в бота на Deno Deploy
+    # подписчики и очередь сообщений переехали в бота на Cloudflare
     for obsolete in ("subscribers", "tg_offset", "commands_registered", "last_ok"):
         state.pop(obsolete, None)
     return state
