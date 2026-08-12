@@ -9,6 +9,11 @@ on:
     - cron: "*/5 * * * *"    # каждые 5 минут — это же и скорость ответа на команды бота
                              # (GitHub может задержать запуск на 5–20 минут)
   workflow_dispatch:          # и кнопка «Run workflow» для проверки вручную
+    inputs:
+      ping:
+        description: "Только проверить связку с ботом (тестовое сообщение)"
+        type: boolean
+        default: false
 
 # чтобы шаг ниже мог закоммитить обновлённый state.json
 permissions:
@@ -33,7 +38,7 @@ jobs:
           # запасной путь: если бот не настроен, шлём напрямую владельцу
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python3 check.py --verbose
+        run: python3 check.py --verbose ${{ inputs.ping && '--ping' || '' }}
 
       - name: Сохранить состояние
         run: |

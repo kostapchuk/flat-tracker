@@ -527,7 +527,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true",
                         help="печатать сообщения в консоль вместо Telegram")
     parser.add_argument("--test-telegram", action="store_true",
-                        help="отправить тестовое сообщение и выйти")
+                        help="отправить тестовое сообщение напрямую и выйти")
+    parser.add_argument("--ping", action="store_true",
+                        help="проверить связку с ботом: тестовая рассылка и выход")
     parser.add_argument("--list", action="store_true",
                         help="показать текущую выдачу и выйти")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -539,6 +541,14 @@ def main():
     if args.test_telegram:
         telegram_send("✅ Трекер квартир на связи.", os.environ["TELEGRAM_CHAT_ID"])
         print("Отправлено.")
+        return 0
+
+    if args.ping:
+        where = "через бота" if bot_configured() else "напрямую (BOT_URL не задан!)"
+        notify([{"text": "🧪 Проверка связи: GitHub Actions → бот → Telegram.\n"
+                         "Если это сообщение пришло, рассылка настроена верно."}],
+               header="")
+        print(f"Отправлено {where}.")
         return 0
 
     if args.list:
