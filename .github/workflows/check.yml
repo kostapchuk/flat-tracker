@@ -37,6 +37,8 @@ jobs:
           # рассылка идёт через бота на Cloudflare Workers — подписчики живут там
           BOT_URL: ${{ secrets.BOT_URL }}
           BROADCAST_SECRET: ${{ secrets.BROADCAST_SECRET }}
+          # отчёт владельцу: edit — одно сообщение с временем, every — каждый раз
+          HEARTBEAT: ${{ vars.HEARTBEAT || 'edit' }}
           # запасной путь: если бот не настроен, шлём напрямую владельцу
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

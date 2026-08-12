@@ -400,6 +400,28 @@ def bot_call(path, payload):
         raise RuntimeError(f"бот ответил {exc.code} на {path}: {body}") from None
 
 
+def heartbeat(summary):
+    """
+    Отчёт владельцу о прошедшей проверке.
+    HEARTBEAT: off — молчим, edit — переписываем одно сообщение, every — новое.
+    """
+    mode = os.environ.get("HEARTBEAT", "edit").strip().lower()
+    if mode == "off":
+        return
+
+    text = ("✅ <b>Проверка пройдена</b> · " +
+            time.strftime("%H:%M", time.gmtime()) + " UTC\n" + summary)
+    try:
+        if bot_configured():
+            bot_call("/heartbeat", {"text": text, "mode": mode})
+        else:
+            chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+            if chat_id:
+                telegram_send(text, chat_id)
+    except Exception as exc:  # отчёт не должен ронять проверку
+        log.warning("не удалось отправить отчёт о проверке: %s", exc)
+
+
 def as_card(flat):
     """Квартира в виде, в котором её отправляет бот."""
     return {
@@ -568,6 +590,7 @@ def run(args):
 
     fresh_catalog, fresh_filters = {}, {}
     scraped, failures = {}, []
+    total_new = total_gone = 0
 
     for filter_id, url, chats, name in jobs:
         if url not in scraped:  # одинаковые ссылки обходим один раз
@@ -599,6 +622,8 @@ def run(args):
         log.info("фильтр «%s»: всего %d, новых %d, ушло %d%s",
                  name, len(current), len(new_ids), len(gone_ids),
                  " (первый обход)" if first_run else "")
+        total_new += len(new_ids)
+        total_gone += len(gone_ids)
 
         if args.init or not chats:
             continue
@@ -659,6 +684,10 @@ def run(args):
     state["catalog"] = fresh_catalog
     state["filters"] = fresh_filters
     state["fails"] = 0
+    if not args.dry_run and not args.init:
+        heartbeat(f"Фильтров: {len(jobs)} · квартир в выдаче: {len(fresh_catalog)} · "
+                  f"новых: {total_new} · ушло: {total_gone}" +
+                  (f"\n⚠️ не обошлись: {', '.join(failures)}" if failures else ""))
     state["last_ok_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     if not args.dry_run:

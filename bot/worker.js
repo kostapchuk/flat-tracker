@@ -23,6 +23,7 @@
  *   filters:<chatId>               — все личные фильтры человека, одним списком
  *   index:filters                  — чаты, у которых фильтры есть
  *   msg:<filterId>:<flatId>:<chat> — каким сообщением прислали эту квартиру
+ *   heartbeat:<chatId>             — сообщение-табло с временем проверки
  *
  * Почему такая схема: в KV операция list согласована лишь в конечном счёте —
  * только что записанный ключ может не попадать в перебор ещё около минуты.
@@ -519,6 +520,41 @@ async function handleRetire(env, request) {
   return Response.json({ edited, sent });
 }
 
+/**
+ * Отчёт о прошедшей проверке владельцу.
+ *
+ * mode=edit — держим одно сообщение и переписываем его: чат не забивается,
+ * а закреплённое сообщение всегда показывает свежее время.
+ * mode=every — отдельное сообщение на каждую проверку.
+ */
+async function handleHeartbeat(env, request) {
+  const payload = await request.json().catch(() => null);
+  const chatId = String(payload?.chat_id || env.OWNER_CHAT_ID || "");
+  const body = payload?.text;
+  if (!chatId || !body) return new Response("нужны chat_id и text", { status: 400 });
+
+  if (payload.mode === "edit") {
+    const known = await env.SUBS.get(`heartbeat:${chatId}`);
+    if (known) {
+      const response = await api(env, "editMessageText", {
+        chat_id: chatId,
+        message_id: Number(known),
+        text: body,
+        parse_mode: "HTML",
+      });
+      if (response.ok) return Response.json({ edited: Number(known) });
+      // сообщение удалили или оно старше 48 часов — заведём новое
+      console.log("табло не отредактировалось, шлю новое");
+    }
+    const sent = await text(env, chatId, body);
+    if (sent.messageId) await env.SUBS.put(`heartbeat:${chatId}`, String(sent.messageId));
+    return Response.json({ sent: sent.messageId || null });
+  }
+
+  const sent = await text(env, chatId, body);
+  return Response.json({ sent: sent.messageId || null });
+}
+
 // ---------------------------------------------------------------------------
 // Запуск проверки в GitHub Actions
 // ---------------------------------------------------------------------------
@@ -590,6 +626,11 @@ export default {
       });
       const menu = await api(env, "setMyCommands", { commands: COMMANDS });
       return Response.json({ webhook: await webhook.json(), commands: await menu.json() });
+    }
+
+    if (url.pathname === "/heartbeat" && request.method === "POST") {
+      if (!authorized(env, request, url)) return new Response("нет", { status: 401 });
+      return await handleHeartbeat(env, request);
     }
 
     if (url.pathname === "/trigger" && authorized(env, request, url)) {
