@@ -199,21 +199,23 @@ async function saveFilters(env, chatId, filters) {
   }
 }
 
-/** Все фильтры всех людей — для проверялки */
+/**
+ * Все фильтры всех людей — для проверялки.
+ *
+ * Читаем из двух источников сразу: указатель знает про свежие записи, до
+ * которых перебор ещё не дошёл, а перебор — про всё, что мимо указателя
+ * (например, записанное прежней версией). Объединение закрывает оба провала;
+ * полагаться на что-то одно уже пробовали, и фильтр терялся.
+ */
 async function allFilters(env) {
-  let stored = await env.SUBS.get("index:filters");
+  const chats = new Set();
 
-  // указателя ещё нет (первый запуск после смены схемы) — собираем перебором
-  // и запоминаем; дальше list уже не понадобится
-  if (stored === null) {
-    const listed = await env.SUBS.list({ prefix: "filters:" });
-    const chats = listed.keys.map((key) => key.name.slice("filters:".length));
-    stored = JSON.stringify(chats);
-    await env.SUBS.put("index:filters", stored);
-    console.log("собрал index:filters:", chats.length);
-  }
+  const stored = await env.SUBS.get("index:filters");
+  for (const chatId of stored ? JSON.parse(stored) : []) chats.add(chatId);
 
-  const chats = stored ? JSON.parse(stored) : [];
+  const listed = await env.SUBS.list({ prefix: "filters:" });
+  for (const key of listed.keys) chats.add(key.name.slice("filters:".length));
+
   const filters = [];
   for (const chatId of chats) {
     const value = await env.SUBS.get(`filters:${chatId}`);
