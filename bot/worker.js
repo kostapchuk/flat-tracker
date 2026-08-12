@@ -589,7 +589,15 @@ export default {
 
     if (url.pathname === "/keys" && authorized(env, request, url)) {
       const listed = await env.SUBS.list();
-      return Response.json({ keys: listed.keys.map((key) => key.name) });
+      const names = listed.keys.map((key) => key.name);
+      if (!url.searchParams.has("values")) return Response.json({ keys: names });
+
+      const dump = {};
+      for (const name of names) {
+        if (name.startsWith("msg:")) continue; // их много и они неинтересны
+        dump[name] = await env.SUBS.get(name);
+      }
+      return Response.json({ keys: names.length, values: dump });
     }
 
     // Диагностика настройки: только факт наличия, без значений

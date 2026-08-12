@@ -54,8 +54,16 @@ jobs:
             | grep -vE '"(last_ok_utc|fails)"' || true)
 
           if [ -n "$meaningful" ]; then
-            git commit -m "state: $(date -u +%FT%TZ)"
-            git push
+            # если предыдущий коммит — тоже состояние, дополняем его вместо
+            # нового: в истории остаётся один такой коммит с последней датой
+            if git log -1 --pretty=%s | grep -q '^state: ' \
+               && [ "$(git log -1 --pretty=%an)" = "flat-tracker" ]; then
+              git commit --amend -m "state: $(date -u +%FT%TZ)"
+              git push --force-with-lease
+            else
+              git commit -m "state: $(date -u +%FT%TZ)"
+              git push
+            fi
           else
             # GitHub отключает расписание в репозиториях без активности 60 дней,
             # поэтому раз в неделю делаем пустой коммит-пульс
