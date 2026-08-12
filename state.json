@@ -25,7 +25,8 @@
       "price_byn": "479924",
       "per_m2_usd": "2 081.00 $/м2",
       "per_m2_byn": "6 134.79 BYN/м2",
-      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/bb5/6pfv2brhgn6n2wtbyxnefvg87lczfeai/602-498-0/3K-78-23.webp"
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/bb5/6pfv2brhgn6n2wtbyxnefvg87lczfeai/602-498-0/3K-78-23.webp",
+      "text": "🏠 <b>Дом № 7.84, кв № 21</b>\n3 комнатная · 78.23 м2 · 4 этаж\n✨ Квартира с отделкой\n💰 <b>162 797 $ / 479 924 BYN</b>\n📐 2 081.00 $/м2 / 6 134.79 BYN/м2\n\nКомнаты: <b>3</b>\nПлощадь: <b>78.23 м2</b>\nЭтаж: <b>4</b>\nПодъезд: <b>1</b>\nРасположение: <b>Центральный парк</b>\nОтделка: <b>Отделка White box</b>\nСрок сдачи: <b>4 квартал 2027 г</b>\nОсобенности: Гардеробная/кладовая, Квартиры с отделкой\n\n<a href=\"https://newbor.by/genplan/kvartal_tsentralnyy-park/dom_7_84/podezd-1/etazh-4/kvartira_413792/\">Открыть на сайте</a>"
     },
     "413431": {
       "id": "413431",
@@ -49,7 +50,8 @@
       "price_byn": "498494",
       "per_m2_usd": "2 040.00 $/м2",
       "per_m2_byn": "6 013.92 BYN/м2",
-      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/a31/ao9r7t88w7unnnhk5qbc4e3lioprx6w8/602-498-0/4K-82-89.webp"
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/a31/ao9r7t88w7unnnhk5qbc4e3lioprx6w8/602-498-0/4K-82-89.webp",
+      "text": "🏠 <b>Дом № 1.6, кв № 56</b>\n4 комнатная · 82.89 м2 · 2 этаж\n💰 <b>169 096 $ / 498 494 BYN</b>\n📐 2 040.00 $/м2 / 6 013.92 BYN/м2\n\nКомнаты: <b>4</b>\nПлощадь: <b>82.89 м2</b>\nЭтаж: <b>2</b>\nПодъезд: <b>3</b>\nРасположение: <b>АРТ-квартал</b>\nОтделка: <b>Без отделки</b>\nСрок сдачи: <b>2 квартал 2027 г</b>\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413431/\">Открыть на сайте</a>"
     },
     "413435": {
       "id": "413435",
@@ -73,18 +75,10 @@
       "price_byn": "499576",
       "per_m2_usd": "2 040.00 $/м2",
       "per_m2_byn": "6 013.92 BYN/м2",
-      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/caf/d33t7b7eqx5njfzkdufi9o64b4ww6irf/602-498-0/4K-83-07.webp"
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/caf/d33t7b7eqx5njfzkdufi9o64b4ww6irf/602-498-0/4K-83-07.webp",
+      "text": "🏠 <b>Дом № 1.6, кв № 60</b>\n4 комнатная · 83.07 м2 · 2 этаж\n💰 <b>169 463 $ / 499 576 BYN</b>\n📐 2 040.00 $/м2 / 6 013.92 BYN/м2\n\nКомнаты: <b>4</b>\nПлощадь: <b>83.07 м2</b>\nЭтаж: <b>2</b>\nПодъезд: <b>3</b>\nРасположение: <b>АРТ-квартал</b>\nОтделка: <b>Без отделки</b>\nСрок сдачи: <b>2 квартал 2027 г</b>\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413435/\">Открыть на сайте</a>"
     }
   },
   "fails": 0,
-  "last_ok": "2026-08-12 11:19:28",
-  "commands_registered": "[{\"command\": \"start\", \"description\": \"Подписаться на новые квартиры\"}, {\"command\": \"stop\", \"description\": \"Отписаться от уведомлений\"}, {\"command\": \"list\", \"description\": \"Что подходит прямо сейчас\"}]",
-  "subscribers": {
-    "536541305": {
-      "since": "2026-08-12 11:01:17",
-      "name": "Kirill Ostapchuk",
-      "username": "kostapchuk"
-    }
-  },
-  "tg_offset": 112943505
+  "last_ok_utc": "2026-08-12T08:27:37Z"
 }

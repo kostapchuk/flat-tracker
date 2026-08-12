@@ -202,6 +202,9 @@ def scrape(filter_url):
             flat = parse_card(card)
             if flat and flat["id"] not in seen:
                 seen.add(flat["id"])
+                # готовый текст кладём в state.json: бот берёт его оттуда для
+                # /list и не дублирует у себя вёрстку сообщения
+                flat["text"] = format_flat(flat)
                 flats.append(flat)
                 added += 1
         log.info("страница %d: карточек %d, новых %d", page, len(cards), added)
@@ -294,9 +297,11 @@ def money(value, suffix):
     return f"{int(value):,}".replace(",", " ") + f" {suffix}"
 
 
-def format_flat(flat):
+def format_flat(flat, retired=False):
+    """retired=True — та же карточка, но помеченная как уже недоступная."""
     props = dict(flat.get("props", {}))
-    lines = [f"🏠 <b>{esc(flat['title'])}</b>"]
+    lines = [f"❌ <s>{esc(flat['title'])}</s>\n<b>Забронирована или продана</b>"
+             if retired else f"🏠 <b>{esc(flat['title'])}</b>"]
 
     facts = " · ".join(x for x in (flat.get("rooms"), flat.get("area"), flat.get("floor")) if x)
     if facts:
@@ -329,146 +334,73 @@ def format_flat(flat):
 
 
 # --------------------------------------------------------------------------- #
-# подписчики и команды бота
+# рассылка
 # --------------------------------------------------------------------------- #
 
-BOT_COMMANDS = [
-    {"command": "start", "description": "Подписаться на новые квартиры"},
-    {"command": "stop", "description": "Отписаться от уведомлений"},
-    {"command": "list", "description": "Что подходит прямо сейчас"},
-]
+def bot_call(path, payload):
+    """POST боту на Deno Deploy. None — если бот не настроен."""
+    base = os.environ.get("BOT_URL", "").strip().rstrip("/")
+    secret = os.environ.get("BROADCAST_SECRET", "").strip()
+    if not base or not secret:
+        return None
 
-# Постоянно работающего процесса нет: бот отвечает только в момент очередной
-# проверки сайта. Пишем об этом прямо, чтобы никто не ждал ответа за секунду.
-DELAY_NOTE = (
-    "⏳ Бот не сидит онлайн постоянно: он просыпается по расписанию, "
-    "чтобы проверить сайт, и тогда же отвечает на команды. "
-    "Поэтому ответ приходит не сразу — пауза в несколько минут "
-    "(иногда дольше) это нормально, а не поломка. "
-    "Сообщение не потеряется: бот ответит на ближайшей проверке."
-)
-
-INTRO = (
-    "Слежу за квартирами в «Новой Боровой» и присылаю новые, как только они "
-    "появляются в продаже.\n\n"
-    "Что отслеживаю: свободные квартиры от 70 м², любой дом, любые цена и этаж.\n\n"
-    "/start — подписаться\n"
-    "/stop — отписаться\n"
-    "/list — что подходит прямо сейчас\n\n" + DELAY_NOTE
-)
+    req = urllib.request.Request(
+        f"{base}{path}",
+        data=json.dumps(payload, ensure_ascii=False).encode(),
+        headers={"content-type": "application/json",
+                 "authorization": f"Bearer {secret}"},
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        return json.loads(resp.read().decode())
 
 
-def subscribers(state):
-    """Список chat_id получателей. Владелец из .env подписан всегда."""
-    subs = state.setdefault("subscribers", {})
-    owner = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-    if owner and owner not in subs:
-        subs[owner] = {"since": time.strftime("%Y-%m-%d %H:%M:%S"), "note": "владелец (из настроек)"}
-    return subs
-
-
-def broadcast(state, send, dry_run=False):
-    """send(chat_id) для каждого подписчика; кто заблокировал бота — отписывается."""
-    dropped = []
-    for chat_id in list(subscribers(state)):
-        if dry_run:
-            send(chat_id)
-            continue
-        try:
-            send(chat_id)
-        except TelegramError as exc:
-            # 403 — бот заблокирован, 400 chat not found — чат удалён
-            if exc.code in (400, 403):
-                dropped.append(chat_id)
-                log.warning("отписываем %s: %s", chat_id, exc.description)
-            else:
-                log.error("не доставлено %s: %s", chat_id, exc)
-        time.sleep(0.5)
-    for chat_id in dropped:
-        state["subscribers"].pop(chat_id, None)
-
-
-def handle_commands(state, flats):
-    """Разбирает новые сообщения боту. flats=None, если сайт не ответил."""
-    try:
-        updates = telegram_api("getUpdates", {
-            "offset": state.get("tg_offset", 0),
-            "timeout": 0,
-            "allowed_updates": '["message"]',
-        }).get("result", [])
-    except (TelegramError, urllib.error.URLError) as exc:
-        log.error("не смог забрать сообщения бота: %s", exc)
+def notify(cards, header=""):
+    """
+    Отдаём карточки боту — подписчики живут у него в KV.
+    Если бот не настроен (локальный прогон), шлём напрямую владельцу.
+    """
+    result = bot_call("/broadcast", {"header": header, "cards": cards})
+    if result is None:
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        if not chat_id:
+            raise RuntimeError("не настроен ни BOT_URL, ни TELEGRAM_CHAT_ID")
+        log.info("бот не настроен — шлю напрямую в чат %s", chat_id)
+        if header:
+            telegram_send(header, chat_id)
+        for card in cards:
+            send_flat({"text": card["text"], "plan_image": card.get("photo")}, chat_id)
         return
+    log.info("бот разослал: подписчиков %s, доставлено %s, отписано %s",
+             result.get("subscribers"), result.get("delivered"), result.get("dropped"))
 
-    # меню перерегистрируем, когда список команд поменялся
-    commands_json = json.dumps(BOT_COMMANDS, ensure_ascii=False, sort_keys=True)
-    if state.get("commands_registered") != commands_json:
-        try:
-            telegram_api("setMyCommands", {"commands": commands_json})
-            state["commands_registered"] = commands_json
-            log.info("меню команд обновлено")
-        except TelegramError as exc:
-            log.warning("не удалось задать меню команд: %s", exc)
 
-    subs = subscribers(state)
-    for update in updates:
-        state["tg_offset"] = update["update_id"] + 1
-        message = update.get("message") or {}
-        chat = message.get("chat") or {}
-        chat_id = str(chat.get("id", ""))
-        text = (message.get("text") or "").strip()
-        if not chat_id or not text.startswith("/"):
-            continue
+def notify_retired(flats):
+    """Квартиры ушли из выдачи: правим уже отправленные сообщения."""
+    items = [{
+        "id": flat.get("id", ""),
+        "text": format_flat(flat, retired=True),
+        "short": (f"❌ <s>{esc(flat.get('title', 'Квартира'))}</s> — "
+                  f'забронирована или продана\n<a href="{esc(flat.get("url", ""))}">карточка</a>'),
+    } for flat in flats]
 
-        command = text.split()[0].split("@")[0].lower()
-        who = " ".join(x for x in (chat.get("first_name"), chat.get("last_name")) if x)
-        log.info("команда %s от %s (%s)", command, who or chat_id, chat_id)
+    result = bot_call("/retire", {"flats": items})
+    if result is None:
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        if not chat_id:
+            return
+        for item in items:
+            telegram_send(item["short"], chat_id)
+        return
+    log.info("бот обновил сообщений: %s, отправил заново: %s",
+             result.get("edited"), result.get("sent"))
 
-        try:
-            if command == "/start":
-                already = chat_id in subs
-                subs[chat_id] = {
-                    "since": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "name": who,
-                    "username": chat.get("username", ""),
-                }
-                if already:
-                    telegram_send("Ты уже подписан 👌\n\n" + INTRO, chat_id)
-                else:
-                    telegram_send("✅ Подписал! Пришлю, как только появится новая "
-                                  "подходящая квартира.\n\n" + INTRO, chat_id)
-                    if flats:
-                        telegram_send(f"Сейчас под фильтр подходит: {len(flats)}. Показываю…", chat_id)
-                        for flat in flats[:MAX_PHOTO_MESSAGES]:
-                            send_flat(flat, chat_id)
-                            time.sleep(0.5)
 
-            elif command == "/stop":
-                if subs.pop(chat_id, None):
-                    telegram_send("🔕 Отписал. Вернуться — /start", chat_id)
-                else:
-                    telegram_send("Ты и так не подписан. Подписаться — /start", chat_id)
-
-            elif command == "/list":
-                if flats is None:
-                    telegram_send("Сайт сейчас не отвечает, попробуй позже.", chat_id)
-                elif not flats:
-                    telegram_send("Сейчас нет ни одной квартиры под фильтр. "
-                                  "Как появится — сразу напишу.", chat_id)
-                else:
-                    telegram_send(f"Сейчас подходит квартир: <b>{len(flats)}</b>", chat_id)
-                    for flat in flats[:MAX_PHOTO_MESSAGES]:
-                        send_flat(flat, chat_id)
-                        time.sleep(0.5)
-                    if len(flats) > MAX_PHOTO_MESSAGES:
-                        telegram_send(f"…и ещё {len(flats) - MAX_PHOTO_MESSAGES} — "
-                                      "смотри на сайте.", chat_id)
-
-            else:
-                telegram_send(INTRO, chat_id)
-
-        except TelegramError as exc:
-            log.error("ответ на %s не доставлен: %s", command, exc)
+def as_card(flat):
+    return {
+        "id": flat.get("id", ""),
+        "text": flat.get("text") or format_flat(flat),
+        "photo": flat.get("plan_image", ""),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -477,9 +409,13 @@ def handle_commands(state, flats):
 
 def load_state():
     if not os.path.exists(STATE_FILE):
-        return {"flats": {}, "fails": 0, "last_ok": None}
+        return {"flats": {}, "fails": 0, "last_ok_utc": None}
     with open(STATE_FILE, encoding="utf-8") as fh:
-        return json.load(fh)
+        state = json.load(fh)
+    # подписчики и очередь сообщений переехали в бота на Deno Deploy
+    for obsolete in ("subscribers", "tg_offset", "commands_registered", "last_ok"):
+        state.pop(obsolete, None)
+    return state
 
 
 def save_state(state):
@@ -504,10 +440,6 @@ def run(args):
     except Exception as exc:  # сеть упала / вёрстка поехала — состояние не трогаем
         flats, error = None, exc
 
-    # команды бота разбираем в любом случае — даже если сайт лежит
-    if not args.dry_run:
-        handle_commands(state, flats)
-
     if error is not None:
         state["fails"] = state.get("fails", 0) + 1
         save_state(state)
@@ -515,10 +447,9 @@ def run(args):
         # молчим о разовых сбоях, но о стабильной поломке сообщаем
         if state["fails"] in (3, 30) and not args.dry_run:
             try:
-                broadcast(state, lambda chat_id: telegram_send(
-                    f"⚠️ Трекер квартир не может проверить страницу "
-                    f"({state['fails']} раза подряд):\n<code>{esc(error)}</code>", chat_id))
-                save_state(state)
+                notify([{"text": f"⚠️ Трекер квартир не может проверить страницу "
+                                 f"({state['fails']} раза подряд):\n"
+                                 f"<code>{esc(error)}</code>"}])
             except Exception as send_exc:
                 log.error("и в Telegram не ушло: %s", send_exc)
         return 1
@@ -529,7 +460,11 @@ def run(args):
     log.info("всего по фильтру: %d, новых: %d, пропало: %d",
              len(current), len(new_ids), len(gone_ids))
 
-    state.update({"flats": current, "fails": 0, "last_ok": time.strftime("%Y-%m-%d %H:%M:%S")})
+    # время всегда в UTC и с явной «Z»: локальный запуск и GitHub Actions
+    # живут в разных поясах, а по строке этого было не видно
+    state.update({"flats": current, "fails": 0,
+                  "last_ok_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    state.pop("last_ok", None)
 
     if args.init:
         save_state(state)
@@ -537,37 +472,33 @@ def run(args):
         return 0
 
     if new_ids:
-        # каждая квартира — отдельным сообщением с планировкой
-        for number, flat_id in enumerate(new_ids[:MAX_PHOTO_MESSAGES], start=1):
-            flat = current[flat_id]
-            header = ("🔔 <b>Новая квартира по твоему фильтру!</b>" if len(new_ids) == 1
-                      else f"🔔 <b>Новая квартира {number} из {len(new_ids)}</b>")
-            if args.dry_run:
-                print(f"[фото: {flat.get('plan_image') or '—'}]")
-                print(header + "\n\n" + format_flat(flat) + "\n")
-            else:
-                broadcast(state, lambda chat_id, f=flat: send_flat(f, chat_id, header))
-                log.info("разослана квартира %s (%s)", flat_id, flat.get("title"))
-                time.sleep(1)  # не упираемся в лимиты Telegram
+        header = ("🔔 <b>Новая квартира по твоему фильтру!</b>" if len(new_ids) == 1
+                  else f"🔔 <b>Новых квартир: {len(new_ids)}</b>")
+        cards = [as_card(current[i]) for i in new_ids[:MAX_PHOTO_MESSAGES]]
 
         overflow = new_ids[MAX_PHOTO_MESSAGES:]
         if overflow:
-            text = (f"…и ещё {len(overflow)} новых:\n" +
-                    "\n".join(f'• <a href="{esc(current[i]["url"])}">{esc(current[i]["title"])}</a>'
-                              f' — {esc(current[i].get("area"))}, {esc(money(current[i].get("price_usd"), "$"))}'
-                              for i in overflow))
-            if args.dry_run:
-                print(text)
-            else:
-                broadcast(state, lambda chat_id: telegram_send(text, chat_id))
+            cards.append({"text": f"…и ещё {len(overflow)}:\n" + "\n".join(
+                f'• <a href="{esc(current[i]["url"])}">{esc(current[i]["title"])}</a>'
+                f' — {esc(current[i].get("area"))}, {esc(money(current[i].get("price_usd"), "$"))}'
+                for i in overflow)})
 
-    if gone_ids and os.environ.get("NOTIFY_REMOVED", "0") == "1":
-        text = ("➖ <b>Пропали из выдачи (забронированы/проданы):</b>\n" +
-                "\n".join(f"• {esc(known[i].get('title', i))}" for i in gone_ids))
         if args.dry_run:
-            print(text)
+            print(header)
+            for card in cards:
+                print(f"\n[фото: {card.get('photo') or '—'}]\n{card['text']}")
         else:
-            broadcast(state, lambda chat_id: telegram_send(text, chat_id))
+            notify(cards, header)
+            log.info("разослано карточек: %d", len(cards))
+
+    if gone_ids:
+        gone = [known[i] for i in gone_ids]
+        log.info("ушли из выдачи: %s", ", ".join(f.get("title", i) for f, i in zip(gone, gone_ids)))
+        if args.dry_run:
+            for flat in gone:
+                print("\n" + format_flat(flat, retired=True))
+        else:
+            notify_retired(gone)
 
     if not args.dry_run:  # прогон «вхолостую» не должен помечать квартиры как виденные
         save_state(state)
@@ -584,8 +515,6 @@ def main():
                         help="отправить тестовое сообщение и выйти")
     parser.add_argument("--list", action="store_true",
                         help="показать текущую выдачу и выйти")
-    parser.add_argument("--subscribers", action="store_true",
-                        help="показать подписчиков и выйти")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -595,12 +524,6 @@ def main():
     if args.test_telegram:
         telegram_send("✅ Трекер квартир на связи.", os.environ["TELEGRAM_CHAT_ID"])
         print("Отправлено.")
-        return 0
-
-    if args.subscribers:
-        for chat_id, info in load_state().get("subscribers", {}).items():
-            print(f"{chat_id}  {info.get('name', '')} @{info.get('username', '')}"
-                  f"  с {info.get('since', '?')}  {info.get('note', '')}")
         return 0
 
     if args.list:

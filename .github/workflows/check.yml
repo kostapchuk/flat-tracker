@@ -27,6 +27,10 @@ jobs:
 
       - name: Проверить квартиры
         env:
+          # рассылка идёт через бота на Deno Deploy — подписчики живут там
+          BOT_URL: ${{ secrets.BOT_URL }}
+          BROADCAST_SECRET: ${{ secrets.BROADCAST_SECRET }}
+          # запасной путь: если бот не настроен, шлём напрямую владельцу
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python3 check.py --verbose
@@ -42,7 +46,7 @@ jobs:
           meaningful=$(git diff --staged -U0 -- state.json \
             | grep -E '^[+-]' \
             | grep -vE '^(\+\+\+|---)' \
-            | grep -vE '"(last_ok|fails)"' || true)
+            | grep -vE '"(last_ok_utc|fails)"' || true)
 
           if [ -n "$meaningful" ]; then
             git commit -m "state: $(date -u +%FT%TZ)"
