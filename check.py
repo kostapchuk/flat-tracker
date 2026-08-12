@@ -524,7 +524,7 @@ def load_state():
     фильтров, а карточка у неё одна.
     """
     if not os.path.exists(STATE_FILE):
-        return {"catalog": {}, "filters": {}, "fails": 0, "last_ok_utc": None}
+        return {"catalog": {}, "filters": {}, "fails": 0, "updated_utc": None}
     with open(STATE_FILE, encoding="utf-8") as fh:
         state = json.load(fh)
 
@@ -732,7 +732,7 @@ def run(args):
         heartbeat(f"Фильтров: {len(jobs)} · квартир в выдаче: {len(fresh_catalog)} · "
                   f"новых: {total_new} · ушло: {total_gone}" +
                   (f"\n⚠️ не обошлись: {', '.join(failures)}" if failures else ""))
-    state["last_ok_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    state["updated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     if not args.dry_run:
         save_state(state)
@@ -776,7 +776,16 @@ def main():
         return 0
 
     if args.if_stale:
-        last = load_state().get("last_ok_utc")
+        # когда проверка отчитывалась в последний раз, знает бот: в состоянии
+        # отметка обновляется редко и для этого не годится
+        last = None
+        if bot_configured():
+            try:
+                last = (bot_get("/health") or {}).get("last_check")
+                if last:
+                    last = last[:19] + "Z"  # ISO из JS с миллисекундами
+            except Exception as exc:
+                log.warning("не спросил бота о последней проверке: %s", exc)
         if last:
             age = time.time() - calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ"))
             if age < args.if_stale * 60:

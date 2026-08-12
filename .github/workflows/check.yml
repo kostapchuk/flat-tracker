@@ -63,13 +63,14 @@ jobs:
             git reset -q --mixed origin/main
             git add state.json
 
-            # last_ok_utc/fails меняются каждый запуск — ради них коммитить не
+            # updated_utc/fails меняются каждый запуск — ради них коммитить не
             # стоит, иначе история превратится в сотни коммитов в сутки.
+            # Признак жизни хранится не здесь, а у бота (KV, ключ last_check).
             # (|| true — grep без совпадений возвращает 1, а шаг идёт с set -e)
             meaningful=$(git diff --staged -U0 -- state.json \
               | grep -E '^[+-]' \
               | grep -vE '^(\+\+\+|---)' \
-              | grep -vE '"(last_ok_utc|fails)"' || true)
+              | grep -vE '"(updated_utc|fails)"' || true)
 
             if [ -z "$meaningful" ]; then
               # GitHub отключает расписание в репозиториях без активности

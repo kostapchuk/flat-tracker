@@ -24,6 +24,7 @@
  *   index:filters                  — чаты, у которых фильтры есть
  *   msg:<filterId>:<flatId>:<chat> — каким сообщением прислали эту квартиру
  *   heartbeat:<chatId>             — сообщение-табло с временем проверки
+ *   last_check                     — когда проверка отчитывалась в последний раз
  *
  * Почему такая схема: в KV операция list согласована лишь в конечном счёте —
  * только что записанный ключ может не попадать в перебор ещё около минуты.
@@ -554,6 +555,10 @@ async function handleHeartbeat(env, request) {
   const body = payload?.text;
   if (!chatId || !body) return new Response("нужны chat_id и text", { status: 400 });
 
+  // признак жизни: в state.json его держать нельзя — туда мы пишем только
+  // при изменении выдачи, и отметка там устаревает на часы
+  await env.SUBS.put("last_check", new Date().toISOString());
+
   if (payload.mode === "edit") {
     const known = await env.SUBS.get(`heartbeat:${chatId}`);
     if (known) {
@@ -679,6 +684,7 @@ export default {
     // Диагностика настройки: только факт наличия, без значений
     if (url.pathname === "/health") {
       return Response.json({
+        last_check: env.SUBS ? await env.SUBS.get("last_check") : null,
         kv_binding_SUBS: Boolean(env.SUBS),
         BOT_TOKEN: Boolean(env.BOT_TOKEN),
         WEBHOOK_SECRET: Boolean(env.WEBHOOK_SECRET),
@@ -700,7 +706,11 @@ export default {
       }
       const people = (await subscribers(env)).length;
       const filters = (await allFilters(env)).length;
-      return new Response(`Трекер квартир жив. Подписчиков: ${people}, личных фильтров: ${filters}\n`);
+      const last = await env.SUBS.get("last_check");
+      return new Response(
+        `Трекер квартир жив. Подписчиков: ${people}, личных фильтров: ${filters}\n` +
+        `Последняя проверка: ${last || "—"}\n`,
+      );
     }
 
     return new Response("не найдено", { status: 404 });
