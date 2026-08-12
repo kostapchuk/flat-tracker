@@ -2,8 +2,8 @@
 """
 Трекер квартир на newbor.by.
 
-Раз в N минут забирает страницу подбора квартир с сохранённым фильтром,
-парсит карточки квартир и шлёт в Telegram сообщение о новых.
+Обходит подборки квартир: общий фильтр плюс личные фильтры подписчиков
+(их список забирает у бота), и сообщает о появившихся и об ушедших.
 
 Зависимостей нет — только стандартная библиотека.
 """
@@ -43,6 +43,7 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 BOT_USER_AGENT = "flat-tracker/1.0 (+https://github.com/kostapchuk/flat-tracker)"
+DEFAULT_FILTER_ID = "default"  # общий фильтр для тех, кто не завёл свой
 MAX_PAGES = 20
 MAX_PHOTO_MESSAGES = 10  # больше — уже спам, остальное уйдёт списком
 BYN_GLYPH = ""  # символ бел. рубля из шрифта сайта
@@ -369,9 +370,25 @@ def bot_configured():
                 and os.environ.get("BROADCAST_SECRET", "").strip())
 
 
-def notify(cards, header=""):
+def bot_get(path):
+    """GET у бота (список фильтров). None — если бот не настроен."""
+    base = os.environ.get("BOT_URL", "").strip().rstrip("/")
+    secret = os.environ.get("BROADCAST_SECRET", "").strip()
+    if not base or not secret:
+        return None
+    req = urllib.request.Request(f"{base}{path}?key={urllib.parse.quote(secret)}",
+                                 headers={"user-agent": BOT_USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")[:200]
+        raise RuntimeError(f"бот ответил {exc.code} на {path}: {body}") from None
+
+
+def notify(cards, header="", chats=None, filter_id=DEFAULT_FILTER_ID):
     """
-    Отдаём карточки боту — подписчики живут у него в KV.
+    Отдаём карточки боту — он разошлёт их адресатам этого фильтра.
     Если бот не настроен (локальный прогон), шлём напрямую владельцу.
     """
     if not bot_configured():
@@ -391,13 +408,15 @@ def notify(cards, header=""):
         result = bot_call("/broadcast", {
             "header": header if number == 0 else "",
             "cards": [card],
+            "chats": chats or [],
+            "filter_id": filter_id,
         })
-        log.info("карточка %d/%d: подписчиков %s, доставлено %s, отписано %s",
-                 number + 1, len(cards), result.get("subscribers"),
+        log.info("  карточка %d/%d: адресатов %s, доставлено %s, отписано %s",
+                 number + 1, len(cards), result.get("targets"),
                  result.get("delivered"), result.get("dropped"))
 
 
-def notify_retired(flats):
+def notify_retired(flats, chats=None, filter_id=DEFAULT_FILTER_ID):
     """Квартиры ушли из выдачи: правим уже отправленные сообщения."""
     items = [{
         "id": flat.get("id", ""),
@@ -415,17 +434,13 @@ def notify_retired(flats):
         return
 
     for item in items:
-        result = bot_call("/retire", {"flats": [item]})
-        log.info("%s: отредактировано %s, отправлено заново %s",
+        result = bot_call("/retire", {
+            "flats": [item],
+            "chats": chats or [],
+            "filter_id": filter_id,
+        })
+        log.info("  %s: отредактировано %s, отправлено заново %s",
                  item["id"], result.get("edited"), result.get("sent"))
-
-
-def as_card(flat):
-    return {
-        "id": flat.get("id", ""),
-        "text": flat.get("text") or format_flat(flat),
-        "photo": flat.get("plan_image", ""),
-    }
 
 
 # --------------------------------------------------------------------------- #
@@ -433,13 +448,30 @@ def as_card(flat):
 # --------------------------------------------------------------------------- #
 
 def load_state():
+    """
+    Состояние: общий каталог квартир + по фильтру список подходящих id.
+    Каталог общий, потому что одна квартира обычно попадает в несколько
+    фильтров, а карточка у неё одна.
+    """
     if not os.path.exists(STATE_FILE):
-        return {"flats": {}, "fails": 0, "last_ok_utc": None}
+        return {"catalog": {}, "filters": {}, "fails": 0, "last_ok_utc": None}
     with open(STATE_FILE, encoding="utf-8") as fh:
         state = json.load(fh)
+
     # подписчики и очередь сообщений переехали в бота на Cloudflare
     for obsolete in ("subscribers", "tg_offset", "commands_registered", "last_ok"):
         state.pop(obsolete, None)
+
+    # переезд со старой схемы (один фильтр, ключ "flats")
+    if "flats" in state:
+        flats = state.pop("flats")
+        state.setdefault("catalog", {}).update(flats)
+        state.setdefault("filters", {})[DEFAULT_FILTER_ID] = {
+            "url": DEFAULT_FILTER_URL,
+            "ids": list(flats),
+        }
+    state.setdefault("catalog", {})
+    state.setdefault("filters", {})
     return state
 
 
@@ -454,78 +486,129 @@ def save_state(state):
 # main
 # --------------------------------------------------------------------------- #
 
+def collect_jobs():
+    """
+    Что обходить: общий фильтр + личные фильтры подписчиков.
+    Возвращает список (filter_id, url, chats, name).
+    """
+    info = bot_get("/filters") if bot_configured() else None
+    if info is None:
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        return [(DEFAULT_FILTER_ID, DEFAULT_FILTER_URL,
+                 [chat_id] if chat_id else [], "общий")]
+
+    jobs = [(DEFAULT_FILTER_ID, DEFAULT_FILTER_URL, info.get("default_chats", []), "общий")]
+    for flt in info.get("filters", []):
+        jobs.append((flt["id"], flt["url"], [flt["chat_id"]], flt.get("name") or flt["id"]))
+    return jobs
+
+
 def run(args):
-    filter_url = os.environ.get("FILTER_URL") or DEFAULT_FILTER_URL
     state = load_state()
-    known = state.get("flats", {})
+    catalog = state["catalog"]
+    known_filters = state["filters"]
 
-    error = None
     try:
-        flats = scrape(filter_url)
-    except Exception as exc:  # сеть упала / вёрстка поехала — состояние не трогаем
-        flats, error = None, exc
-
-    if error is not None:
-        state["fails"] = state.get("fails", 0) + 1
-        save_state(state)
-        log.error("ошибка проверки (%d подряд): %s", state["fails"], error)
-        # молчим о разовых сбоях, но о стабильной поломке сообщаем
-        if state["fails"] in (3, 30) and not args.dry_run:
-            try:
-                notify([{"text": f"⚠️ Трекер квартир не может проверить страницу "
-                                 f"({state['fails']} раза подряд):\n"
-                                 f"<code>{esc(error)}</code>"}])
-            except Exception as send_exc:
-                log.error("и в Telegram не ушло: %s", send_exc)
+        jobs = collect_jobs()
+    except Exception as exc:
+        log.error("не смог забрать список фильтров у бота: %s", exc)
         return 1
 
-    current = {f["id"]: f for f in flats}
-    new_ids = [i for i in current if i not in known]
-    gone_ids = [i for i in known if i not in current]
-    log.info("всего по фильтру: %d, новых: %d, пропало: %d",
-             len(current), len(new_ids), len(gone_ids))
+    # свой фильтр из .env перебивает общий — удобно для локальных прогонов
+    override = os.environ.get("FILTER_URL", "").strip()
+    if override:
+        jobs = [(fid, override if fid == DEFAULT_FILTER_ID else url, chats, name)
+                for fid, url, chats, name in jobs]
 
-    # время всегда в UTC и с явной «Z»: локальный запуск и GitHub Actions
-    # живут в разных поясах, а по строке этого было не видно
-    state.update({"flats": current, "fails": 0,
-                  "last_ok_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
-    state.pop("last_ok", None)
+    log.info("фильтров к обходу: %d", len(jobs))
 
-    if args.init:
+    fresh_catalog, fresh_filters = {}, {}
+    scraped, failures = {}, []
+
+    for filter_id, url, chats, name in jobs:
+        if url not in scraped:  # одинаковые ссылки обходим один раз
+            try:
+                scraped[url] = scrape(url)
+            except Exception as exc:
+                scraped[url] = exc
+        flats = scraped[url]
+
+        if isinstance(flats, Exception):
+            log.error("фильтр «%s»: %s", name, flats)
+            failures.append(name)
+            # выдачу не трогаем, иначе после сбоя всё покажется новым
+            if filter_id in known_filters:
+                fresh_filters[filter_id] = known_filters[filter_id]
+                for flat_id in known_filters[filter_id].get("ids", []):
+                    if flat_id in catalog:
+                        fresh_catalog[flat_id] = catalog[flat_id]
+            continue
+
+        current = {flat["id"]: flat for flat in flats}
+        fresh_catalog.update(current)
+        fresh_filters[filter_id] = {"url": url, "ids": list(current)}
+
+        previous = set(known_filters.get(filter_id, {}).get("ids", []))
+        first_run = filter_id not in known_filters
+        new_ids = [i for i in current if i not in previous]
+        gone_ids = [i for i in previous if i not in current]
+        log.info("фильтр «%s»: всего %d, новых %d, ушло %d%s",
+                 name, len(current), len(new_ids), len(gone_ids),
+                 " (первый обход)" if first_run else "")
+
+        if args.init or not chats:
+            continue
+
+        if new_ids:
+            header = ("🔔 <b>Новая квартира</b>" if len(new_ids) == 1
+                      else f"🔔 <b>Новых квартир: {len(new_ids)}</b>")
+            if filter_id != DEFAULT_FILTER_ID:
+                header += f" · фильтр «{esc(name)}»"
+            if first_run:
+                header = f"📋 <b>Фильтр «{esc(name)}»</b>: подходит {len(new_ids)}"
+
+            cards = [as_card(current[i]) for i in new_ids[:MAX_PHOTO_MESSAGES]]
+            overflow = new_ids[MAX_PHOTO_MESSAGES:]
+            if overflow:
+                cards.append({"text": f"…и ещё {len(overflow)}:\n" + "\n".join(
+                    f'• <a href="{esc(current[i]["url"])}">{esc(current[i]["title"])}</a>'
+                    f' — {esc(current[i].get("area"))}, {esc(money(current[i].get("price_usd"), "$"))}'
+                    for i in overflow)})
+
+            if args.dry_run:
+                print(f"\n=== {name}: {header}")
+                for card in cards:
+                    print(f"[фото: {card.get('photo') or '—'}]\n{card['text']}\n")
+            else:
+                notify(cards, header, chats=chats, filter_id=filter_id)
+
+        if gone_ids:
+            gone = [catalog[i] for i in gone_ids if i in catalog]
+            if gone and not args.dry_run:
+                notify_retired(gone, chats=chats, filter_id=filter_id)
+            elif gone:
+                print(f"\n=== {name}: ушли из выдачи")
+                for flat in gone:
+                    print(format_flat(flat, retired=True))
+
+    if failures and len(failures) == len(jobs):
+        state["fails"] = state.get("fails", 0) + 1
         save_state(state)
-        log.info("состояние проинициализировано без уведомлений")
-        return 0
+        log.error("ни один фильтр не обошёлся (%d раз подряд)", state["fails"])
+        if state["fails"] in (3, 30) and not args.dry_run:
+            try:
+                notify([{"text": "⚠️ Трекер квартир не может проверить сайт "
+                                 f"({state['fails']} раза подряд). Посмотри логи."}])
+            except Exception as exc:
+                log.error("и в Telegram не ушло: %s", exc)
+        return 1
 
-    if new_ids:
-        header = ("🔔 <b>Новая квартира по твоему фильтру!</b>" if len(new_ids) == 1
-                  else f"🔔 <b>Новых квартир: {len(new_ids)}</b>")
-        cards = [as_card(current[i]) for i in new_ids[:MAX_PHOTO_MESSAGES]]
+    state["catalog"] = fresh_catalog
+    state["filters"] = fresh_filters
+    state["fails"] = 0
+    state["last_ok_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-        overflow = new_ids[MAX_PHOTO_MESSAGES:]
-        if overflow:
-            cards.append({"text": f"…и ещё {len(overflow)}:\n" + "\n".join(
-                f'• <a href="{esc(current[i]["url"])}">{esc(current[i]["title"])}</a>'
-                f' — {esc(current[i].get("area"))}, {esc(money(current[i].get("price_usd"), "$"))}'
-                for i in overflow)})
-
-        if args.dry_run:
-            print(header)
-            for card in cards:
-                print(f"\n[фото: {card.get('photo') or '—'}]\n{card['text']}")
-        else:
-            notify(cards, header)
-            log.info("разослано карточек: %d", len(cards))
-
-    if gone_ids:
-        gone = [known[i] for i in gone_ids]
-        log.info("ушли из выдачи: %s", ", ".join(f.get("title", i) for f, i in zip(gone, gone_ids)))
-        if args.dry_run:
-            for flat in gone:
-                print("\n" + format_flat(flat, retired=True))
-        else:
-            notify_retired(gone)
-
-    if not args.dry_run:  # прогон «вхолостую» не должен помечать квартиры как виденные
+    if not args.dry_run:
         save_state(state)
     return 0
 
@@ -541,7 +624,9 @@ def main():
     parser.add_argument("--ping", action="store_true",
                         help="проверить связку с ботом: тестовая рассылка и выход")
     parser.add_argument("--list", action="store_true",
-                        help="показать текущую выдачу и выйти")
+                        help="показать выдачу общего фильтра и выйти")
+    parser.add_argument("--filters", action="store_true",
+                        help="показать фильтры, которые придут из бота, и выйти")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -559,6 +644,11 @@ def main():
                          "Если это сообщение пришло, рассылка настроена верно."}],
                header="")
         print(f"Отправлено {where}.")
+        return 0
+
+    if args.filters:
+        for filter_id, url, chats, name in collect_jobs():
+            print(f"{filter_id:10} {name:24} чатов: {len(chats):2}  {url[:90]}")
         return 0
 
     if args.list:
