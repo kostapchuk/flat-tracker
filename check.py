@@ -45,6 +45,7 @@ USER_AGENT = (
 )
 BOT_USER_AGENT = "flat-tracker/1.0 (+https://github.com/kostapchuk/flat-tracker)"
 DEFAULT_FILTER_ID = "default"  # общий фильтр для тех, кто не завёл свой
+MISSES_BEFORE_GONE = 2  # сколько обходов подряд квартиры нет, чтобы счесть её ушедшей
 MAX_PAGES = 20
 MAX_PHOTO_MESSAGES = 10  # больше — уже спам, остальное уйдёт списком
 BYN_GLYPH = ""  # символ бел. рубля из шрифта сайта
@@ -555,6 +556,23 @@ def save_state(state):
 # main
 # --------------------------------------------------------------------------- #
 
+def audiences(chats, flat_ids, already):
+    """
+    Одна квартира может подойти под несколько фильтров одного человека —
+    но получить он её должен один раз. Группируем адресатов по тому, что
+    им ещё не отправляли, и помечаем отправленное.
+    """
+    groups = {}
+    for chat in chats:
+        pending = tuple(i for i in flat_ids if i not in already.setdefault(chat, set()))
+        if pending:
+            groups.setdefault(pending, []).append(chat)
+    for pending, group in groups.items():
+        for chat in group:
+            already[chat].update(pending)
+        yield list(pending), group
+
+
 def collect_jobs():
     """
     Что обходить: общий фильтр + личные фильтры подписчиков.
@@ -594,6 +612,7 @@ def run(args):
     fresh_catalog, fresh_filters = {}, {}
     scraped, failures = {}, []
     total_new = total_gone = 0
+    sent_new, sent_gone = {}, {}  # кому что уже ушло в этом обходе
 
     for filter_id, url, chats, name in jobs:
         if url not in scraped:  # одинаковые ссылки обходим один раз
@@ -615,15 +634,35 @@ def run(args):
             continue
 
         current = {flat["id"]: flat for flat in flats}
-        fresh_catalog.update(current)
-        fresh_filters[filter_id] = {"url": url, "ids": list(current)}
-
-        previous = set(known_filters.get(filter_id, {}).get("ids", []))
+        stored = known_filters.get(filter_id, {})
+        previous = set(stored.get("ids", []))
+        misses = dict(stored.get("misses", {}))
         first_run = filter_id not in known_filters
+
+        # Пропажа на один обход ничего не значит: выдача сайта иногда мигает,
+        # а поспешное «забронирована» потом оборачивается ложной «новой».
+        missing = previous - set(current)
+        gone_ids, pending = [], []
+        for flat_id in missing:
+            misses[flat_id] = misses.get(flat_id, 0) + 1
+            (gone_ids if misses[flat_id] >= MISSES_BEFORE_GONE else pending).append(flat_id)
+        for flat_id in current:
+            misses.pop(flat_id, None)  # вернулась или никуда не девалась
+
+        # те, кто пропал впервые, остаются известными — ждём подтверждения
+        keep_ids = list(current) + pending
+        for flat_id in pending:
+            if flat_id in catalog:
+                fresh_catalog.setdefault(flat_id, catalog[flat_id])
+
+        fresh_catalog.update(current)
+        fresh_filters[filter_id] = {"url": url, "ids": keep_ids,
+                                    "misses": {k: v for k, v in misses.items() if k in pending}}
+
         new_ids = [i for i in current if i not in previous]
-        gone_ids = [i for i in previous if i not in current]
-        log.info("фильтр «%s»: всего %d, новых %d, ушло %d%s",
+        log.info("фильтр «%s»: всего %d, новых %d, ушло %d%s%s",
                  name, len(current), len(new_ids), len(gone_ids),
+                 f", ждём подтверждения {len(pending)}" if pending else "",
                  " (первый обход)" if first_run else "")
         total_new += len(new_ids)
         total_gone += len(gone_ids)
@@ -639,29 +678,31 @@ def run(args):
             if first_run:
                 header = f"📋 <b>Фильтр «{esc(name)}»</b>: подходит {len(new_ids)}"
 
-            cards = [as_card(current[i]) for i in new_ids[:MAX_PHOTO_MESSAGES]]
-            overflow = new_ids[MAX_PHOTO_MESSAGES:]
-            if overflow:
-                cards.append({"text": f"…и ещё {len(overflow)}:\n" + "\n".join(
-                    f'• <a href="{esc(current[i]["url"])}">{esc(current[i]["title"])}</a>'
-                    f' — {esc(current[i].get("area"))}, {esc(money(current[i].get("price_usd"), "$"))}'
-                    for i in overflow)})
-
-            if args.dry_run:
-                print(f"\n=== {name}: {header}")
-                for card in cards:
-                    print(f"[фото: {card.get('photo') or '—'}]\n{card['text']}\n")
-            else:
-                notify(cards, header, chats=chats, filter_id=filter_id)
+            for pending_ids, group in audiences(chats, new_ids, sent_new):
+                cards = [as_card(current[i]) for i in pending_ids[:MAX_PHOTO_MESSAGES]]
+                overflow = pending_ids[MAX_PHOTO_MESSAGES:]
+                if overflow:
+                    cards.append({"text": f"…и ещё {len(overflow)}:\n" + "\n".join(
+                        f'• <a href="{esc(current[i]["url"])}">{esc(current[i]["title"])}</a>'
+                        f' — {esc(current[i].get("area"))}, {esc(money(current[i].get("price_usd"), "$"))}'
+                        for i in overflow)})
+                if args.dry_run:
+                    print(f"\n=== {name} → {group}: {header}")
+                    for card in cards:
+                        print(f"[фото: {card.get('photo') or '—'}]\n{card['text']}\n")
+                else:
+                    notify(cards, header, chats=group, filter_id=filter_id)
 
         if gone_ids:
             gone = [catalog[i] for i in gone_ids if i in catalog]
-            if gone and not args.dry_run:
-                notify_retired(gone, chats=chats, filter_id=filter_id)
-            elif gone:
-                print(f"\n=== {name}: ушли из выдачи")
-                for flat in gone:
-                    print(format_flat(flat, retired=True))
+            for pending_ids, group in audiences(chats, [f["id"] for f in gone], sent_gone):
+                batch = [f for f in gone if f["id"] in set(pending_ids)]
+                if args.dry_run:
+                    print(f"\n=== {name} → {group}: ушли из выдачи")
+                    for flat in batch:
+                        print(format_flat(flat, retired=True))
+                else:
+                    notify_retired(batch, chats=group, filter_id=filter_id)
 
     if failures and len(failures) == len(jobs):
         state["fails"] = state.get("fails", 0) + 1
