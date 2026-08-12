@@ -1,0 +1,97 @@
+# Проверка квартир в GitHub Actions — работает независимо от домашнего компьютера.
+#
+# Нужны секреты репозитория (Settings → Secrets and variables → Actions):
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+name: flat-tracker
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # родное расписание GitHub: ненадёжное и с задержками,
+                             # точность обеспечивает расписание Cloudflare
+  repository_dispatch:        # запуск по расписанию Cloudflare
+    types: [check]
+  workflow_dispatch:          # и кнопка «Run workflow» для проверки вручную
+    inputs:
+      ping:
+        description: "Только проверить связку с ботом (тестовое сообщение)"
+        type: boolean
+        default: false
+
+# чтобы шаг ниже мог закоммитить обновлённый state.json
+permissions:
+  contents: write
+
+concurrency:
+  group: flat-tracker
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Проверить квартиры
+        env:
+          # рассылка идёт через бота на Cloudflare Workers — подписчики живут там
+          BOT_URL: ${{ secrets.BOT_URL }}
+          BROADCAST_SECRET: ${{ secrets.BROADCAST_SECRET }}
+          # отчёт владельцу: edit — одно сообщение с временем, every — каждый раз
+          HEARTBEAT: ${{ vars.HEARTBEAT || 'edit' }}
+          # запасной путь: если бот не настроен, шлём напрямую владельцу
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 check.py --verbose ${{ inputs.ping && '--ping' || '' }}
+
+      - name: Сохранить состояние
+        run: |
+          git config user.name "flat-tracker"
+          git config user.email "flat-tracker@users.noreply.github.com"
+
+          # Запуски могут наложиться (расписание GitHub + расписание Cloudflare),
+          # и тогда push второго отвергается. Поэтому каждую попытку начинаем с
+          # актуальной истории: переносим HEAD на origin/main, сохранив свой
+          # state.json в рабочем каталоге.
+          for attempt in 1 2 3; do
+            git fetch -q origin main
+            git reset -q --mixed origin/main
+            git add state.json
+
+            # last_ok_utc/fails меняются каждый запуск — ради них коммитить не
+            # стоит, иначе история превратится в сотни коммитов в сутки.
+            # (|| true — grep без совпадений возвращает 1, а шаг идёт с set -e)
+            meaningful=$(git diff --staged -U0 -- state.json \
+              | grep -E '^[+-]' \
+              | grep -vE '^(\+\+\+|---)' \
+              | grep -vE '"(last_ok_utc|fails)"' || true)
+
+            if [ -z "$meaningful" ]; then
+              # GitHub отключает расписание в репозиториях без активности
+              # 60 дней, поэтому раз в неделю делаем пустой коммит-пульс
+              age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+              if [ "$age" -gt 604800 ]; then
+                git reset -q
+                git commit --allow-empty -m "heartbeat: $(date -u +%FT%TZ)"
+                git push origin HEAD:main || continue
+              fi
+              exit 0
+            fi
+
+            # если предыдущий коммит — тоже состояние, дополняем его вместо
+            # нового: в истории остаётся один такой коммит с последней датой
+            if git log -1 --pretty=%s | grep -q '^state: ' \
+               && [ "$(git log -1 --pretty=%an)" = "flat-tracker" ]; then
+              git commit --amend -m "state: $(date -u +%FT%TZ)"
+              git push --force-with-lease origin HEAD:main && exit 0
+            else
+              git commit -m "state: $(date -u +%FT%TZ)"
+              git push origin HEAD:main && exit 0
+            fi
+
+            echo "push не прошёл (попытка $attempt), обновляюсь и пробую снова"
+            sleep $(( attempt * 5 ))
+          done
+
+          echo "не смог записать состояние за три попытки" >&2
+          exit 1

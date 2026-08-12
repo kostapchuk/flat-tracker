@@ -1,0 +1,129 @@
+{
+  "fails": 0,
+  "last_ok_utc": "2026-08-12T12:50:42Z",
+  "catalog": {
+    "414311": {
+      "id": "414311",
+      "url": "https://newbor.by/genplan/avia_kvartal/dom_14_3/podezd-4/etazh-5/kvartira_414311/",
+      "title": "Дом № 14.3, кв № 141",
+      "rooms": "4 комнатная",
+      "floor": "5 этаж",
+      "area": "76.97 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "76.97 м2",
+        "Комнаты": "4",
+        "Этаж": "5",
+        "Подъезд": "4",
+        "Отделка": "Без отделки",
+        "Расположение": "Авиаквартал",
+        "Срок сдачи": "4 квартал 2027 г"
+      },
+      "features": [
+        "Мастер-спальня"
+      ],
+      "price_usd": "151708",
+      "price_byn": "447235",
+      "per_m2_usd": "1 971.00 $/м2",
+      "per_m2_byn": "5 810.51 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/656/gzpdoj86s98guvivxko4c8avpy87ablz/602-498-0/4K-76-97.webp",
+      "text": "🏠 <b>Дом 14.3</b>\n📐 <b>76.97 м2</b>\n💵 1 971.00 $/м2 · 5 810.51 BYN/м2\n🔑 Квартира № 141\n🏢 5 этаж\n🚪 Подъезд 4\n🧱 Без отделки\n📅 Сдача: 4 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>151 708 $ / 447 235 BYN</b>\nКомнат: 4\nКвартал: Авиаквартал\nОсобенности: Мастер-спальня\n\n<a href=\"https://newbor.by/genplan/avia_kvartal/dom_14_3/podezd-4/etazh-5/kvartira_414311/\">Открыть на сайте</a>"
+    },
+    "413792": {
+      "id": "413792",
+      "url": "https://newbor.by/genplan/kvartal_tsentralnyy-park/dom_7_84/podezd-1/etazh-4/kvartira_413792/",
+      "title": "Дом № 7.84, кв № 21",
+      "rooms": "3 комнатная",
+      "floor": "4 этаж",
+      "area": "78.23 м2",
+      "badge": "Квартира с отделкой",
+      "props": {
+        "Площадь": "78.23 м2",
+        "Комнаты": "3",
+        "Этаж": "4",
+        "Подъезд": "1",
+        "Отделка": "Отделка White box",
+        "Расположение": "Центральный парк",
+        "Срок сдачи": "4 квартал 2027 г"
+      },
+      "features": [
+        "Гардеробная/кладовая",
+        "Квартиры с отделкой"
+      ],
+      "price_usd": "162797",
+      "price_byn": "479924",
+      "per_m2_usd": "2 081.00 $/м2",
+      "per_m2_byn": "6 134.79 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/bb5/6pfv2brhgn6n2wtbyxnefvg87lczfeai/602-498-0/3K-78-23.webp",
+      "text": "🏠 <b>Дом 7.84</b>\n📐 <b>78.23 м2</b>\n💵 2 081.00 $/м2 · 6 134.79 BYN/м2\n🔑 Квартира № 21\n🏢 4 этаж\n🚪 Подъезд 1\n🧱 С отделкой\n📅 Сдача: 4 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>162 797 $ / 479 924 BYN</b>\nКомнат: 3\nОтделка: White box\nКвартал: Центральный парк\nОсобенности: Гардеробная/кладовая\n\n<a href=\"https://newbor.by/genplan/kvartal_tsentralnyy-park/dom_7_84/podezd-1/etazh-4/kvartira_413792/\">Открыть на сайте</a>"
+    },
+    "413431": {
+      "id": "413431",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413431/",
+      "title": "Дом № 1.6, кв № 56",
+      "rooms": "4 комнатная",
+      "floor": "2 этаж",
+      "area": "82.89 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "82.89 м2",
+        "Комнаты": "4",
+        "Этаж": "2",
+        "Подъезд": "3",
+        "Отделка": "Без отделки",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "2 квартал 2027 г"
+      },
+      "features": [],
+      "price_usd": "169096",
+      "price_byn": "498494",
+      "per_m2_usd": "2 040.00 $/м2",
+      "per_m2_byn": "6 013.92 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/a31/ao9r7t88w7unnnhk5qbc4e3lioprx6w8/602-498-0/4K-82-89.webp",
+      "text": "🏠 <b>Дом 1.6</b>\n📐 <b>82.89 м2</b>\n💵 2 040.00 $/м2 · 6 013.92 BYN/м2\n🔑 Квартира № 56\n🏢 2 этаж\n🚪 Подъезд 3\n🧱 Без отделки\n📅 Сдача: 2 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>169 096 $ / 498 494 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413431/\">Открыть на сайте</a>"
+    },
+    "413435": {
+      "id": "413435",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413435/",
+      "title": "Дом № 1.6, кв № 60",
+      "rooms": "4 комнатная",
+      "floor": "2 этаж",
+      "area": "83.07 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "83.07 м2",
+        "Комнаты": "4",
+        "Этаж": "2",
+        "Подъезд": "3",
+        "Отделка": "Без отделки",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "2 квартал 2027 г"
+      },
+      "features": [],
+      "price_usd": "169463",
+      "price_byn": "499576",
+      "per_m2_usd": "2 040.00 $/м2",
+      "per_m2_byn": "6 013.92 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/caf/d33t7b7eqx5njfzkdufi9o64b4ww6irf/602-498-0/4K-83-07.webp",
+      "text": "🏠 <b>Дом 1.6</b>\n📐 <b>83.07 м2</b>\n💵 2 040.00 $/м2 · 6 013.92 BYN/м2\n🔑 Квартира № 60\n🏢 2 этаж\n🚪 Подъезд 3\n🧱 Без отделки\n📅 Сдача: 2 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>169 463 $ / 499 576 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413435/\">Открыть на сайте</a>"
+    }
+  },
+  "filters": {
+    "default": {
+      "url": "https://newbor.by/podbor-kvartiry/?FILTER_NAME=arrFlatFilter&link=main&IBLOCK_ID=29&IBLOCK_SECTION_ID=&booked=hide&arrFlatFilter_139_MIN=70&arrFlatFilter_144_4252452532=Y&set_filter=%D0%9F%D0%BE%D0%BA%D0%B0%D0%B7%D0%B0%D1%82%D1%8C+%D0%BA%D0%B2%D0%B0%D1%80%D1%82%D0%B8%D1%80%D1%8B",
+      "ids": [
+        "414311",
+        "413792",
+        "413431",
+        "413435"
+      ]
+    },
+    "vehucd": {
+      "url": "https://newbor.by/podbor-kvartiry/?FILTER_NAME=arrFlatFilter&link=main&arrFlatFilter_312_1889509032=Y&price-cur=on&arrFlatFilter_141_MIN=267339&arrFlatFilter_141_MAX=680643&price-cur-per-metr=on&arrFlatFilter_830_MIN=5692&arrFlatFilter_830_MAX=9417&arrFlatFilter_139_MIN=34&arrFlatFilter_139_MAX=102&arrFlatFilter_187_MIN=1&arrFlatFilter_187_MAX=18&booked=hide&arrFlatFilter_144_4252452532=Y&set_filter=%D0%9F%D0%BE%D0%BA%D0%B0%D0%B7%D0%B0%D1%82%D1%8C+%D0%BA%D0%B2%D0%B0%D1%80%D1%82%D0%B8%D1%80%D1%8B&IBLOCK_ID=29",
+      "ids": [
+        "413431",
+        "413435"
+      ]
+    }
+  }
+}

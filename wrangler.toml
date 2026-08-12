@@ -1,0 +1,30 @@
+# Конфиг воркера для деплоя из репозитория (Cloudflare Workers Builds).
+#
+# Важно: когда воркер собирается из Git, привязки и переменные берутся отсюда,
+# а не из панели. Что здесь не описано — при деплое пропадёт.
+#
+# Секретов тут нет и быть не должно: BOT_TOKEN, WEBHOOK_SECRET и
+# BROADCAST_SECRET живут в панели (Settings → Variables and Secrets, тип
+# Secret) и деплоем не затираются.
+
+name = "flat-tracker-bot"
+main = "bot/worker.js"
+compatibility_date = "2026-08-01"
+
+# Не секретные настройки — их видно в репозитории, и это нормально
+[vars]
+OWNER_CHAT_ID = "536541305"
+GH_REPO = "kostapchuk/flat-tracker"
+STATE_URL = "https://raw.githubusercontent.com/kostapchuk/flat-tracker/main/state.json"
+
+# Хранилище подписчиков и message_id отправленных карточек.
+# id — идентификатор namespace из панели: Storage & Databases → KV
+[[kv_namespaces]]
+binding = "SUBS"
+id = "34fa957844dd4ad8b47ba10bd2bbf578"
+
+# Точное расписание: воркер раз в 10 минут просит GitHub запустить проверку.
+# Родной крон GitHub оставлен включённым — он ненадёжен, но и не мешает:
+# одновременные запуски воркфлоу выстраиваются в очередь, а не дублируются.
+[triggers]
+crons = ["*/10 * * * *"]

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>by.newbor.flat-tracker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/kirillostapchuk/flat-tracker/run-local.sh</string>
+    </array>
+
+    <!-- git и python берём из homebrew, launchd о нём не знает -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kirillostapchuk/flat-tracker</string>
+
+    <!-- каждые 15 минут; сработает, только если GitHub давно молчит -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kirillostapchuk/flat-tracker/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kirillostapchuk/flat-tracker/launchd.err.log</string>
+</dict>
+</plist>
