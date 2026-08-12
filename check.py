@@ -300,39 +300,67 @@ def money(value, suffix):
     return f"{int(value):,}".replace(",", " ") + f" {suffix}"
 
 
+def split_title(title):
+    """«Дом № 7.84, кв № 21» → ('7.84', '21')"""
+    house = re.search(r"Дом\s*№?\s*([\d.]+)", title or "")
+    number = re.search(r"кв\.?\s*№?\s*(\d+)", title or "")
+    return (house.group(1) if house else (title or "")), (number.group(1) if number else "")
+
+
 def format_flat(flat, retired=False):
-    """retired=True — та же карточка, но помеченная как уже недоступная."""
+    """
+    Главное — по строке на факт, в порядке, который важен при выборе:
+    дом, метраж, цена метра, номер квартиры, этаж, подъезд, отделка, сдача.
+    Всё прочее уходит в «Дополнительно», чтобы не мешало смотреть.
+    """
     props = dict(flat.get("props", {}))
-    lines = [f"❌ <s>{esc(flat['title'])}</s>\n<b>Забронирована или продана</b>"
-             if retired else f"🏠 <b>{esc(flat['title'])}</b>"]
+    house, number = split_title(flat.get("title", ""))
+    lines = []
 
-    facts = " · ".join(x for x in (flat.get("rooms"), flat.get("area"), flat.get("floor")) if x)
-    if facts:
-        lines.append(esc(facts))
-    if flat.get("badge"):
-        lines.append(f"✨ {esc(flat['badge'])}")
+    if retired:
+        lines.append(f"❌ <s>{esc(flat.get('title', ''))}</s>")
+        lines.append("<b>Забронирована или продана</b>\n")
 
+    lines.append(f"🏠 <b>Дом {esc(house)}</b>")
+    if flat.get("area"):
+        lines.append(f"📐 <b>{esc(flat['area'])}</b>")
+    per_m2 = " · ".join(x for x in (flat.get("per_m2_usd"), flat.get("per_m2_byn")) if x)
+    if per_m2:
+        lines.append(f"💵 {esc(per_m2)}")
+    if number:
+        lines.append(f"🔑 Квартира № {esc(number)}")
+    if flat.get("floor"):
+        lines.append(f"🏢 {esc(flat['floor'])}")
+    if props.get("Подъезд"):
+        lines.append(f"🚪 Подъезд {esc(props['Подъезд'])}")
+    if props.get("Отделка"):
+        lines.append(f"🧱 {esc(props['Отделка'])}")
+    if props.get("Срок сдачи"):
+        lines.append(f"📅 Сдача: {esc(props['Срок сдачи'])}")
+
+    extra = []
     price = " / ".join(x for x in (money(flat.get("price_usd"), "$"),
                                    money(flat.get("price_byn"), "BYN")) if x)
     if price:
-        lines.append(f"💰 <b>{esc(price)}</b>")
-    per_m2 = " / ".join(x for x in (flat.get("per_m2_usd"), flat.get("per_m2_byn")) if x)
-    if per_m2:
-        lines.append(f"📐 {esc(per_m2)}")
-
-    # сначала знакомые поля в понятном порядке, потом всё остальное из карточки
-    lines.append("")
-    for key in ("Комнаты", "Площадь", "Этаж", "Подъезд", "Расположение", "Отделка", "Срок сдачи"):
-        value = props.pop(key, "")
-        if value:
-            lines.append(f"{esc(key)}: <b>{esc(value)}</b>")
-    for key, value in props.items():
-        if value:
-            lines.append(f"{esc(key)}: <b>{esc(value)}</b>")
+        extra.append(f"Стоимость: <b>{esc(price)}</b>")
+    if props.get("Комнаты") or flat.get("rooms"):
+        extra.append(f"Комнат: {esc(props.get('Комнаты') or flat.get('rooms'))}")
+    if props.get("Расположение"):
+        extra.append(f"Квартал: {esc(props['Расположение'])}")
+    if flat.get("badge"):
+        extra.append(esc(flat["badge"]))
     if flat.get("features"):
-        lines.append("Особенности: " + esc(", ".join(flat["features"])))
+        extra.append("Особенности: " + esc(", ".join(flat["features"])))
+    for key, value in props.items():  # всё, что не разобрали выше
+        if value and key not in ("Комнаты", "Площадь", "Этаж", "Подъезд",
+                                 "Расположение", "Отделка", "Срок сдачи"):
+            extra.append(f"{esc(key)}: {esc(value)}")
 
-    lines.append(f'\n<a href="{esc(flat["url"])}">Открыть на сайте</a>')
+    if extra:
+        lines.append("\n<b>Дополнительно</b>")
+        lines.extend(extra)
+
+    lines.append(f'\n<a href="{esc(flat.get("url", ""))}">Открыть на сайте</a>')
     return "\n".join(lines)
 
 
