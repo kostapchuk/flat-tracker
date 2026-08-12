@@ -409,8 +409,11 @@ def heartbeat(summary):
     if mode == "off":
         return
 
-    text = ("✅ <b>Проверка пройдена</b> · " +
-            time.strftime("%H:%M", time.gmtime()) + " UTC\n" + summary)
+    # в отчёте человеку — местное время; в state.json остаётся UTC,
+    # чтобы машинам было однозначно
+    offset = int(os.environ.get("REPORT_UTC_OFFSET", "3"))
+    stamp = time.strftime("%H:%M", time.gmtime(time.time() + offset * 3600))
+    text = f"✅ <b>Проверка пройдена</b> · {stamp} МСК\n{summary}"
     try:
         if bot_configured():
             bot_call("/heartbeat", {"text": text, "mode": mode})
