@@ -354,13 +354,17 @@ def bot_call(path, payload):
         return json.loads(resp.read().decode())
 
 
+def bot_configured():
+    return bool(os.environ.get("BOT_URL", "").strip()
+                and os.environ.get("BROADCAST_SECRET", "").strip())
+
+
 def notify(cards, header=""):
     """
     Отдаём карточки боту — подписчики живут у него в KV.
     Если бот не настроен (локальный прогон), шлём напрямую владельцу.
     """
-    result = bot_call("/broadcast", {"header": header, "cards": cards})
-    if result is None:
+    if not bot_configured():
         chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
         if not chat_id:
             raise RuntimeError("не настроен ни BOT_URL, ни TELEGRAM_CHAT_ID")
@@ -370,8 +374,17 @@ def notify(cards, header=""):
         for card in cards:
             send_flat({"text": card["text"], "plan_image": card.get("photo")}, chat_id)
         return
-    log.info("бот разослал: подписчиков %s, доставлено %s, отписано %s",
-             result.get("subscribers"), result.get("delivered"), result.get("dropped"))
+
+    # по одной карточке за запрос: у Cloudflare на бесплатном тарифе
+    # не больше 50 подзапросов на один входящий запрос
+    for number, card in enumerate(cards):
+        result = bot_call("/broadcast", {
+            "header": header if number == 0 else "",
+            "cards": [card],
+        })
+        log.info("карточка %d/%d: подписчиков %s, доставлено %s, отписано %s",
+                 number + 1, len(cards), result.get("subscribers"),
+                 result.get("delivered"), result.get("dropped"))
 
 
 def notify_retired(flats):
@@ -383,16 +396,18 @@ def notify_retired(flats):
                   f'забронирована или продана\n<a href="{esc(flat.get("url", ""))}">карточка</a>'),
     } for flat in flats]
 
-    result = bot_call("/retire", {"flats": items})
-    if result is None:
+    if not bot_configured():
         chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
         if not chat_id:
             return
         for item in items:
             telegram_send(item["short"], chat_id)
         return
-    log.info("бот обновил сообщений: %s, отправил заново: %s",
-             result.get("edited"), result.get("sent"))
+
+    for item in items:
+        result = bot_call("/retire", {"flats": [item]})
+        log.info("%s: отредактировано %s, отправлено заново %s",
+                 item["id"], result.get("edited"), result.get("sent"))
 
 
 def as_card(flat):

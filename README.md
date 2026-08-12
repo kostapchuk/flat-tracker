@@ -8,12 +8,12 @@
 Две независимые части — общаются через один HTTP-запрос:
 
 ```
-GitHub Actions (по расписанию)          Deno Deploy (всегда онлайн)
+GitHub Actions (по расписанию)      Cloudflare Workers (всегда онлайн)
 ┌────────────────────────────┐          ┌──────────────────────────┐
-│ check.py                   │          │ bot/main.ts              │
+│ check.py                   │          │ bot/worker.js            │
 │  • обходит сайт            │  POST    │  • вебхук Telegram       │
 │  • сравнивает с state.json │ /broad-  │  • /start /stop /list    │
-│  • нашёл новое ───────────────cast───▶│  • подписчики в Deno KV  │
+│  • нашёл новое ───────────────cast───▶│  • подписчики в KV       │
 │                            │  POST    │  • помнит message_id     │
 │  • квартира ушла ─────────────retire─▶│  • правит старые сообщения│
 │  • коммитит state.json     │          │                          │
@@ -65,7 +65,7 @@ GitHub Actions (по расписанию)          Deno Deploy (всегда о
 | `/stop` | отписаться |
 | `/list` | что подходит под фильтр прямо сейчас |
 
-Любое другое сообщение — короткая справка. Подписчики хранятся в Deno KV;
+Любое другое сообщение — короткая справка. Подписчики хранятся в KV;
 `OWNER_CHAT_ID` подписан всегда. Кто заблокировал бота, отписывается сам:
 Telegram отдаёт 403, и запись удаляется из KV.
 
@@ -82,38 +82,47 @@ Telegram отдаёт 403, и запись удаляется из KV.
 сообщение вместо правки. Команда `/list` всегда показывает только актуальное:
 она читает `state.json`, откуда ушедшие квартиры уже удалены.
 
-### Развернуть бота на Deno Deploy
+### Развернуть бота на Cloudflare Workers
 
-1. https://dash.deno.com → войти через GitHub → **New Project** → выбрать
-   репозиторий `flat-tracker`, точка входа `bot/main.ts`.
-2. Settings → Environment Variables:
+Всё делается из браузера, ничего ставить не нужно.
+
+1. **Хранилище**: dash.cloudflare.com → Storage & Databases → KV →
+   Create namespace, имя `flat-tracker`.
+2. **Воркер**: Compute (Workers) → Create → Start from Hello World → Deploy.
+   Затем Edit code → вставить содержимое `bot/worker.js` → Deploy.
+3. **Привязка KV**: воркер → Settings → Bindings → Add → KV namespace,
+   Variable name `SUBS`, namespace из шага 1.
+4. **Переменные**: воркер → Settings → Variables and Secrets:
 
    | Переменная | Значение |
    |---|---|
-   | `BOT_TOKEN` | токен от @BotFather |
-   | `WEBHOOK_SECRET` | любая случайная строка |
-   | `BROADCAST_SECRET` | любая случайная строка (её же — в секреты GitHub) |
+   | `BOT_TOKEN` | токен от @BotFather (тип Secret) |
+   | `WEBHOOK_SECRET` | любая случайная строка (Secret) |
+   | `BROADCAST_SECRET` | любая случайная строка (Secret), её же — в секреты GitHub |
    | `OWNER_CHAT_ID` | твой chat_id, подписан всегда |
    | `STATE_URL` | `https://raw.githubusercontent.com/<юзер>/flat-tracker/main/state.json` |
 
-3. Привязать вебхук и меню команд — один раз, из браузера или терминала:
-
-   ```bash
-   curl "https://<проект>.deno.dev/setup?key=<BROADCAST_SECRET>"
-   ```
-
+5. **Вебхук и меню команд** — один раз, открыть в браузере:
+   `https://<воркер>.workers.dev/setup?key=<BROADCAST_SECRET>`
    В ответе должно быть `"ok": true` у `webhook` и у `commands`.
-4. В GitHub: Settings → Secrets and variables → Actions добавить
-   `BOT_URL` = `https://<проект>.deno.dev` и
-   `BROADCAST_SECRET` = та же строка, что в Deno Deploy.
+6. **Секреты GitHub**: Settings → Secrets and variables → Actions →
+   `BOT_URL` = `https://<воркер>.workers.dev`,
+   `BROADCAST_SECRET` = та же строка, что в шаге 4.
 
-Проверка: `https://<проект>.deno.dev/` отвечает числом подписчиков.
+Проверка: `https://<воркер>.workers.dev/` отвечает числом подписчиков.
+
+Обновлять код бота потом — через Edit code в панели (или подключить
+Workers Builds к репозиторию, если захочется деплой по push).
 
 ## Проверялка
 
 Запускается воркфлоу `.github/workflows/check.yml` по расписанию; секреты
 `BOT_URL` и `BROADCAST_SECRET` — из шага 4 выше. Если их не задать,
 `check.py` шлёт напрямую в `TELEGRAM_CHAT_ID` — удобно для локальных прогонов.
+
+Карточки уходят боту по одной за запрос: на бесплатном тарифе Cloudflare один
+входящий запрос может сделать не больше 50 подзапросов, а рассылка на
+нескольких подписчиков это быстро съедает.
 
 `state.json` коммитится обратно в репозиторий, но только когда меняется
 что-то содержательное: список квартир, а не отметка времени последней

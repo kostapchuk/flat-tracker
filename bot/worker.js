@@ -2,74 +2,39 @@
  * Telegram-бот трекера квартир. Живёт на Cloudflare Workers и отвечает мгновенно.
  *
  * Разделение обязанностей:
- *   - этот бот  — общение с людьми: подписки, личные фильтры, команды;
- *   - GitHub Actions — обход сайта по расписанию. Список фильтров он забирает
- *     здесь (GET /filters), а результат отдаёт обратно: POST /broadcast
- *     (появилась квартира) и POST /retire (квартиру сняли).
- *
- * Ещё воркер по расписанию (cron в wrangler.toml) дёргает проверку в GitHub
- * через repository_dispatch: у Cloudflare расписание точное, а обход сайта
- * и состояние остаются в одном экземпляре — в Actions.
+ *   - этот бот  — общение с людьми: подписки (KV) и команды;
+ *   - GitHub Actions — обход сайта по расписанию; найдя изменения, дёргает
+ *     POST /broadcast (появилась квартира) и POST /retire (квартиру сняли).
  *
  * Настройки в панели Cloudflare (Workers → Settings):
- *   Variables:  BOT_TOKEN, WEBHOOK_SECRET, BROADCAST_SECRET, OWNER_CHAT_ID,
- *               STATE_URL, GH_TOKEN, GH_REPO
+ *   Variables:  BOT_TOKEN, WEBHOOK_SECRET, BROADCAST_SECRET, OWNER_CHAT_ID, STATE_URL
  *   KV binding: SUBS
- * При сборке из репозитория привязка и несекретные переменные берутся
- * из wrangler.toml.
  *
  * Ключи в KV:
- *   subs:<chatId>                  — подписчик
- *   filters:<chatId>               — все личные фильтры человека, одним списком
- *   index:filters                  — чаты, у которых фильтры есть
- *   msg:<filterId>:<flatId>:<chat> — каким сообщением прислали эту квартиру
- *   heartbeat:<chatId>             — сообщение-табло с временем проверки
- *
- * Почему такая схема: в KV операция list согласована лишь в конечном счёте —
- * только что записанный ключ может не попадать в перебор ещё около минуты.
- * Поэтому всё, что нужно читать сразу после записи (фильтры человека и список
- * таких людей), лежит в конкретных ключах и читается через get, а не list.
+ *   subs:<chatId>            — подписчик
+ *   msg:<flatId>:<chatId>    — какое сообщение прислало эту квартиру
  *
  * На бесплатном тарифе один запрос может сделать не больше 50 подзапросов,
- * поэтому check.py шлёт по одной карточке за запрос.
+ * поэтому check.py шлёт по одной карточке за запрос — так мы в лимит не упрёмся.
  */
 
 const CAPTION_LIMIT = 1024;
 const MAX_CARDS = 10;
-const MAX_FILTERS = 5;
-const DEFAULT_FILTER = "default";
 
 const COMMANDS = [
-  { command: "list", description: "Что подходит прямо сейчас" },
-  { command: "add", description: "Добавить фильтр — прислать ссылку с сайта" },
-  { command: "filters", description: "Мои фильтры" },
-  { command: "del", description: "Удалить фильтр" },
   { command: "start", description: "Подписаться на новые квартиры" },
   { command: "stop", description: "Отписаться от уведомлений" },
+  { command: "list", description: "Что подходит прямо сейчас" },
 ];
-
-const HOW_TO_ADD = [
-  "Чтобы добавить фильтр:",
-  "",
-  "1. Открой <a href=\"https://newbor.by/podbor-kvartiry/\">подбор квартир</a> на сайте",
-  "2. Выстави параметры — площадь, дом, цену, отделку, что нужно",
-  "3. Скопируй адрес из строки браузера",
-  "4. Пришли его мне сюда одним сообщением",
-  "",
-  "Можно дописать название в том же сообщении — например, «четырёшки у парка». " +
-    "Тогда я так фильтр и назову.",
-].join("\n");
 
 const INTRO = [
   "Слежу за квартирами в «Новой Боровой» и присылаю новые, как только они появляются в продаже.",
   "",
-  "<b>Свой фильтр.</b> Собери подборку на newbor.by (площадь, дом, цена, отделка — что угодно) и пришли мне ссылку из адресной строки. Буду следить именно по ней.",
-  "Можно добавить до " + MAX_FILTERS + " фильтров. Если своих нет, работает общий: свободные квартиры от 70 м².",
+  "Что отслеживаю: свободные квартиры от 70 м², любой дом, любые цена и этаж.",
   "",
-  "/add — добавить фильтр",
-  "/filters — мои фильтры",
-  "/list — что подходит прямо сейчас",
+  "/start — подписаться",
   "/stop — отписаться",
+  "/list — что подходит прямо сейчас",
 ].join("\n");
 
 // ---------------------------------------------------------------------------
@@ -85,10 +50,10 @@ function api(env, method, payload) {
 }
 
 /**
- * Отправляет карточку. Возвращает { delivered, messageId }.
+ * Отправляет карточку. Возвращает { delivered, messageId, photo }.
  * delivered=false — чат недоступен, подписчика надо убрать.
  */
-async function send(env, chatId, card, filterId) {
+async function send(env, chatId, card) {
   const withCaption = Boolean(card.photo) && card.text.length <= CAPTION_LIMIT;
   const attempts = withCaption
     ? [
@@ -115,14 +80,14 @@ async function send(env, chatId, card, filterId) {
       const body = await response.json().catch(() => null);
       const messageId = body && body.result && body.result.message_id;
       // запоминаем сообщение: когда квартиру снимут, отредактируем именно его
-      if (messageId && card.id && filterId) {
+      if (messageId && card.id) {
         await env.SUBS.put(
-          `msg:${filterId}:${card.id}:${chatId}`,
+          `msg:${card.id}:${chatId}`,
           JSON.stringify({ messageId, photo: isPhoto }),
           { expirationTtl: 60 * 60 * 24 * 120 }, // через 4 месяца уже не актуально
         );
       }
-      return { delivered: true, messageId };
+      return { delivered: true, messageId, photo: isPhoto };
     }
 
     const body = await response.text();
@@ -139,22 +104,8 @@ function text(env, chatId, message) {
   return send(env, chatId, { text: message });
 }
 
-/**
- * Разбирает отказ на правку сообщения.
- *   unchanged — текст совпал с текущим, это не ошибка;
- *   gone      — сообщение удалили или оно старше 48 часов, нужно новое;
- *   иначе     — временная беда, новое слать не надо, чтобы не плодить дубли.
- */
-function editFailure(detail) {
-  if (detail.includes("message is not modified")) return "unchanged";
-  if (detail.includes("message to edit not found") ||
-      detail.includes("message can't be edited") ||
-      detail.includes("MESSAGE_ID_INVALID")) return "gone";
-  return "transient";
-}
-
 // ---------------------------------------------------------------------------
-// Подписчики и фильтры
+// Подписчики
 // ---------------------------------------------------------------------------
 
 async function subscribe(env, chatId, info) {
@@ -178,139 +129,30 @@ async function subscribers(env) {
   return [...ids];
 }
 
-/** Фильтры одного человека: [{ id, name, url }] */
-async function userFilters(env, chatId) {
-  const stored = await env.SUBS.get(`filters:${chatId}`);
-  return stored ? JSON.parse(stored) : [];
-}
-
-async function saveFilters(env, chatId, filters) {
-  await env.SUBS.put(`filters:${chatId}`, JSON.stringify(filters));
-
-  // указатель, чтобы обходиться без list — он отстаёт от записи
-  const stored = await env.SUBS.get("index:filters");
-  const chats = new Set(stored ? JSON.parse(stored) : []);
-  const before = chats.size;
-  filters.length ? chats.add(chatId) : chats.delete(chatId);
-  if (chats.size !== before) {
-    await env.SUBS.put("index:filters", JSON.stringify([...chats]));
-  }
-}
-
-/**
- * Все фильтры всех людей — для проверялки.
- *
- * Читаем из двух источников сразу: указатель знает про свежие записи, до
- * которых перебор ещё не дошёл, а перебор — про всё, что мимо указателя
- * (например, записанное прежней версией). Объединение закрывает оба провала;
- * полагаться на что-то одно уже пробовали, и фильтр терялся.
- */
-async function allFilters(env) {
-  const chats = new Set();
-
-  const stored = await env.SUBS.get("index:filters");
-  for (const chatId of stored ? JSON.parse(stored) : []) chats.add(chatId);
-
-  const listed = await env.SUBS.list({ prefix: "filters:" });
-  for (const key of listed.keys) chats.add(key.name.slice("filters:".length));
-
-  const filters = [];
-  for (const chatId of chats) {
-    const value = await env.SUBS.get(`filters:${chatId}`);
-    for (const filter of value ? JSON.parse(value) : []) {
-      filters.push({ id: filter.id, chat_id: chatId, name: filter.name, url: filter.url });
-    }
-  }
-  return filters;
-}
-
-function newFilterId() {
-  return Math.random().toString(36).slice(2, 8);
-}
-
 // ---------------------------------------------------------------------------
 // Текущая выдача — из state.json, который коммитит GitHub Actions
 // ---------------------------------------------------------------------------
 
-async function loadState(env) {
+async function currentCards(env) {
   try {
     const response = await fetch(env.STATE_URL, {
       cf: { cacheTtl: 0 },
       headers: { "cache-control": "no-cache" },
     });
     if (!response.ok) throw new Error(`state.json -> ${response.status}`);
-    return await response.json();
+    const state = await response.json();
+    return Object.values(state.flats || {})
+      .map((flat) => ({ id: flat.id, text: flat.text || "", photo: flat.plan_image }))
+      .filter((card) => card.text);
   } catch (error) {
     console.error("не смог прочитать state.json:", error);
     return null;
   }
 }
 
-/** Карточки конкретного фильтра. null — состояние недоступно, [] — пусто */
-function cardsOf(state, filterId) {
-  if (!state) return null;
-  const filter = (state.filters || {})[filterId];
-  if (!filter) return [];
-  const catalog = state.catalog || {};
-  return (filter.ids || [])
-    .map((id) => catalog[id])
-    .filter(Boolean)
-    .map((flat) => ({ id: flat.id, text: flat.text || "", photo: flat.plan_image }))
-    .filter((card) => card.text);
-}
-
 // ---------------------------------------------------------------------------
 // Команды
 // ---------------------------------------------------------------------------
-
-async function showMatches(env, chatId, state, filterId, title) {
-  const cards = cardsOf(state, filterId);
-
-  if (cards === null) {
-    await text(env, chatId, "Не могу получить список, попробуй через пару минут.");
-    return;
-  }
-  if (!cards.length) {
-    await text(env, chatId, `${title}: сейчас пусто. Как появится — сразу напишу.`);
-    return;
-  }
-
-  await text(env, chatId, `${title}: <b>${cards.length}</b>`);
-  for (const card of cards.slice(0, MAX_CARDS)) await send(env, chatId, card, filterId);
-  if (cards.length > MAX_CARDS) {
-    await text(env, chatId, `…и ещё ${cards.length - MAX_CARDS} — смотри на сайте.`);
-  }
-}
-
-async function addFilter(env, chatId, url, name) {
-  const filters = await userFilters(env, chatId);
-  if (filters.length >= MAX_FILTERS) {
-    await text(
-      env,
-      chatId,
-      `У тебя уже ${MAX_FILTERS} фильтров — больше нельзя. Удали лишний: /filters`,
-    );
-    return;
-  }
-  if (filters.some((filter) => filter.url === url)) {
-    await text(env, chatId, "Такой фильтр уже добавлен. Список: /filters");
-    return;
-  }
-
-  const id = newFilterId();
-  const title = name || `Фильтр ${filters.length + 1}`;
-  filters.push({ id, name: title, url, created: new Date().toISOString() });
-  await saveFilters(env, chatId, filters);
-  await subscribe(env, chatId, { since: new Date().toISOString() });
-
-  await text(
-    env,
-    chatId,
-    `✅ Добавил фильтр «${title}».\n\nПервая проверка по нему пройдёт в ближайшие минуты — ` +
-      "тогда и пришлю, что под него подходит. Дальше буду сообщать только о новых.\n\n" +
-      "Мои фильтры: /filters",
-  );
-}
 
 async function handleUpdate(env, update) {
   const message = update.message;
@@ -318,18 +160,9 @@ async function handleUpdate(env, update) {
   if (!chat || !chat.id || typeof message.text !== "string") return;
 
   const chatId = String(chat.id);
-  const body = message.text.trim();
-  const command = body.split(/\s+/)[0].split("@")[0].toLowerCase();
+  const command = message.text.trim().split(/\s+/)[0].split("@")[0].toLowerCase();
   const name = [chat.first_name, chat.last_name].filter(Boolean).join(" ");
   console.log(`${command} от ${name || chatId} (${chatId})`);
-
-  // Ссылка на подборку = новый фильтр. Остальной текст сообщения — его название.
-  const link = body.match(/https?:\/\/(?:www\.)?newbor\.by\/\S+/i);
-  if (link) {
-    const title = body.replace(link[0], "").replace(/^\/\w+/, "").trim().slice(0, 60);
-    await addFilter(env, chatId, link[0], title);
-    return;
-  }
 
   if (command === "/start") {
     const isNew = await subscribe(env, chatId, {
@@ -345,8 +178,11 @@ async function handleUpdate(env, update) {
         : "Ты уже подписан 👌\n\n") + INTRO,
     );
     if (isNew) {
-      const state = await loadState(env);
-      await showMatches(env, chatId, state, DEFAULT_FILTER, "Сейчас по общему фильтру подходит");
+      const cards = await currentCards(env);
+      if (cards && cards.length) {
+        await text(env, chatId, `Сейчас под фильтр подходит: <b>${cards.length}</b>. Показываю…`);
+        for (const card of cards.slice(0, MAX_CARDS)) await send(env, chatId, card);
+      }
     }
     return;
   }
@@ -356,72 +192,23 @@ async function handleUpdate(env, update) {
     await text(
       env,
       chatId,
-      was
-        ? "🔕 Отписал. Фильтры сохранил — вернуться можно командой /start"
-        : "Ты и так не подписан. Подписаться — /start",
+      was ? "🔕 Отписал. Вернуться — /start" : "Ты и так не подписан. Подписаться — /start",
     );
-    return;
-  }
-
-  if (command === "/add") {
-    await text(env, chatId, HOW_TO_ADD);
-    return;
-  }
-
-  if (command === "/filters") {
-    const filters = await userFilters(env, chatId);
-    if (!filters.length) {
-      await text(
-        env,
-        chatId,
-        "Своих фильтров нет — работает общий: свободные квартиры от 70 м², любой дом.\n\n" +
-          HOW_TO_ADD,
-      );
-      return;
-    }
-    const lines = filters.map((filter, index) =>
-      `${index + 1}. <b>${filter.name}</b>\n<a href="${filter.url}">ссылка</a> · удалить: /del_${filter.id}`
-    );
-    await text(env, chatId, "Твои фильтры:\n\n" + lines.join("\n\n") +
-      "\n\nДобавить ещё — /add");
-    return;
-  }
-
-  if (command === "/del" || command.startsWith("/del_")) {
-    const filters = await userFilters(env, chatId);
-    const id = command.startsWith("/del_")
-      ? command.slice("/del_".length)
-      : (body.split(/\s+/)[1] || "").replace(/^\//, "");
-
-    if (!id) {
-      if (!filters.length) {
-        await text(env, chatId, "Удалять нечего — своих фильтров нет.\n\n" + HOW_TO_ADD);
-        return;
-      }
-      const lines = filters.map((filter) => `• <b>${filter.name}</b> — удалить: /del_${filter.id}`);
-      await text(env, chatId, "Какой фильтр удалить?\n\n" + lines.join("\n"));
-      return;
-    }
-
-    const doomed = filters.find((filter) => filter.id === id);
-    if (!doomed) {
-      await text(env, chatId, "Такого фильтра нет. Список: /filters");
-      return;
-    }
-    await saveFilters(env, chatId, filters.filter((filter) => filter.id !== id));
-    await text(env, chatId, `🗑 Удалил «${doomed.name}». Остальные: /filters`);
     return;
   }
 
   if (command === "/list") {
-    const state = await loadState(env);
-    const filters = await userFilters(env, chatId);
-    if (!filters.length) {
-      await showMatches(env, chatId, state, DEFAULT_FILTER, "Сейчас по общему фильтру подходит");
-      return;
-    }
-    for (const filter of filters) {
-      await showMatches(env, chatId, state, filter.id, `«${filter.name}»`);
+    const cards = await currentCards(env);
+    if (cards === null) {
+      await text(env, chatId, "Не могу получить список, попробуй через пару минут.");
+    } else if (cards.length === 0) {
+      await text(env, chatId, "Сейчас нет ни одной квартиры под фильтр. Как появится — сразу напишу.");
+    } else {
+      await text(env, chatId, `Сейчас подходит квартир: <b>${cards.length}</b>`);
+      for (const card of cards.slice(0, MAX_CARDS)) await send(env, chatId, card);
+      if (cards.length > MAX_CARDS) {
+        await text(env, chatId, `…и ещё ${cards.length - MAX_CARDS} — смотри на сайте.`);
+      }
     }
     return;
   }
@@ -430,16 +217,8 @@ async function handleUpdate(env, update) {
 }
 
 // ---------------------------------------------------------------------------
-// Обмен с проверялкой
+// Рассылка от GitHub Actions
 // ---------------------------------------------------------------------------
-
-/** Кого обслуживает общий фильтр: подписчики без своих фильтров */
-async function handleFilters(env) {
-  const filters = await allFilters(env);
-  const withOwn = new Set(filters.map((filter) => filter.chat_id));
-  const defaultChats = (await subscribers(env)).filter((chatId) => !withOwn.has(chatId));
-  return Response.json({ filters, default_chats: defaultChats });
-}
 
 async function handleBroadcast(env, request) {
   const payload = await request.json().catch(() => null);
@@ -447,10 +226,7 @@ async function handleBroadcast(env, request) {
     return new Response("нужен непустой cards[]", { status: 400 });
   }
 
-  const targets = payload.chats && payload.chats.length
-    ? payload.chats.map(String)
-    : await subscribers(env);
-  const filterId = payload.filter_id || DEFAULT_FILTER;
+  const targets = await subscribers(env);
   let delivered = 0;
   let dropped = 0;
 
@@ -459,7 +235,7 @@ async function handleBroadcast(env, request) {
 
     let alive = true;
     for (const card of payload.cards.slice(0, MAX_CARDS)) {
-      alive = (await send(env, chatId, card, filterId)).delivered;
+      alive = (await send(env, chatId, card)).delivered;
       if (!alive) break;
     }
 
@@ -472,7 +248,7 @@ async function handleBroadcast(env, request) {
     }
   }
 
-  return Response.json({ targets: targets.length, delivered, dropped });
+  return Response.json({ subscribers: targets.length, delivered, dropped });
 }
 
 /**
@@ -486,20 +262,14 @@ async function handleRetire(env, request) {
     return new Response("нужен непустой flats[]", { status: 400 });
   }
 
-  const filterId = payload.filter_id || DEFAULT_FILTER;
   let edited = 0;
   let sent = 0;
 
   for (const flat of payload.flats) {
-    let listed = await env.SUBS.list({ prefix: `msg:${filterId}:${flat.id}:` });
-    // сообщения, отправленные до появления фильтров, лежат под старым ключом
-    if (!listed.keys.length) {
-      listed = await env.SUBS.list({ prefix: `msg:${flat.id}:` });
-    }
+    const listed = await env.SUBS.list({ prefix: `msg:${flat.id}:` });
 
     for (const key of listed.keys) {
-      const parts = key.name.split(":");
-      const chatId = parts[parts.length - 1];
+      const chatId = key.name.split(":")[2];
       const stored = JSON.parse(await env.SUBS.get(key.name) || "{}");
       if (!stored.messageId) continue;
 
@@ -514,93 +284,21 @@ async function handleRetire(env, request) {
       if (response.ok) {
         edited++;
       } else {
-        const detail = await response.text();
-        const reason = editFailure(detail);
-        if (reason === "unchanged") {
-          edited++;
-        } else {
-          console.error(`правка ${flat.id} в ${chatId} (${reason}): ${detail.slice(0, 160)}`);
-          // сообщение удалили или уже не отредактировать — говорим отдельно
-          if ((await text(env, chatId, flat.short)).delivered) sent++;
-        }
+        console.error(`правка ${flat.id} в ${chatId}: ${(await response.text()).slice(0, 160)}`);
+        if ((await text(env, chatId, flat.short)).delivered) sent++;
       }
       await env.SUBS.delete(key.name);
     }
 
-    // квартиру никому не отправляли — сообщаем тем, кого этот фильтр касается
+    // квартиру никому не отправляли (например, была в выдаче до запуска бота)
     if (!listed.keys.length) {
-      const targets = payload.chats && payload.chats.length
-        ? payload.chats.map(String)
-        : await subscribers(env);
-      for (const chatId of targets) {
+      for (const chatId of await subscribers(env)) {
         if ((await text(env, chatId, flat.short)).delivered) sent++;
       }
     }
   }
 
   return Response.json({ edited, sent });
-}
-
-/**
- * Отчёт о прошедшей проверке владельцу.
- *
- * mode=edit — держим одно сообщение и переписываем его: чат не забивается,
- * а закреплённое сообщение всегда показывает свежее время.
- * mode=every — отдельное сообщение на каждую проверку.
- */
-async function handleHeartbeat(env, request) {
-  const payload = await request.json().catch(() => null);
-  const chatId = String(payload?.chat_id || env.OWNER_CHAT_ID || "");
-  const body = payload?.text;
-  if (!chatId || !body) return new Response("нужны chat_id и text", { status: 400 });
-
-  if (payload.mode === "edit") {
-    const known = await env.SUBS.get(`heartbeat:${chatId}`);
-    if (known) {
-      const response = await api(env, "editMessageText", {
-        chat_id: chatId,
-        message_id: Number(known),
-        text: body,
-        parse_mode: "HTML",
-      });
-      if (response.ok) return Response.json({ edited: Number(known) });
-
-      const reason = editFailure(await response.text());
-      // текст тот же — Telegram отказывает, но табло и так актуально
-      if (reason === "unchanged") return Response.json({ unchanged: Number(known) });
-      // временная беда: новое слать нельзя, иначе при каждом сбое будет дубль
-      if (reason === "transient") return Response.json({ skipped: Number(known) });
-      console.log("табло удалено или устарело, завожу новое");
-    }
-    const sent = await text(env, chatId, body);
-    if (sent.messageId) await env.SUBS.put(`heartbeat:${chatId}`, String(sent.messageId));
-    return Response.json({ sent: sent.messageId || null });
-  }
-
-  const sent = await text(env, chatId, body);
-  return Response.json({ sent: sent.messageId || null });
-}
-
-// ---------------------------------------------------------------------------
-// Запуск проверки в GitHub Actions
-// ---------------------------------------------------------------------------
-
-async function triggerCheck(env) {
-  if (!env.GH_TOKEN || !env.GH_REPO) {
-    return { ok: false, error: "не заданы GH_TOKEN или GH_REPO" };
-  }
-  const response = await fetch(`https://api.github.com/repos/${env.GH_REPO}/dispatches`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${env.GH_TOKEN}`,
-      accept: "application/vnd.github+json",
-      "content-type": "application/json",
-      "user-agent": "flat-tracker-bot",
-    },
-    body: JSON.stringify({ event_type: "check" }),
-  });
-  if (response.ok) return { ok: true };
-  return { ok: false, status: response.status, error: (await response.text()).slice(0, 200) };
 }
 
 // ---------------------------------------------------------------------------
@@ -627,10 +325,6 @@ export default {
       return new Response("ok"); // Telegram доволен в любом случае
     }
 
-    if (url.pathname === "/filters" && authorized(env, request, url)) {
-      return await handleFilters(env);
-    }
-
     if (url.pathname === "/broadcast" && request.method === "POST") {
       if (!authorized(env, request, url)) return new Response("нет", { status: 401 });
       return await handleBroadcast(env, request);
@@ -654,62 +348,11 @@ export default {
       return Response.json({ webhook: await webhook.json(), commands: await menu.json() });
     }
 
-    if (url.pathname === "/heartbeat" && request.method === "POST") {
-      if (!authorized(env, request, url)) return new Response("нет", { status: 401 });
-      return await handleHeartbeat(env, request);
-    }
-
-    if (url.pathname === "/trigger" && authorized(env, request, url)) {
-      return Response.json(await triggerCheck(env));
-    }
-
-    if (url.pathname === "/keys" && authorized(env, request, url)) {
-      const listed = await env.SUBS.list();
-      const names = listed.keys.map((key) => key.name);
-      if (!url.searchParams.has("values")) return Response.json({ keys: names });
-
-      const dump = {};
-      for (const name of names) {
-        if (name.startsWith("msg:")) continue; // их много и они неинтересны
-        dump[name] = await env.SUBS.get(name);
-      }
-      return Response.json({ keys: names.length, values: dump });
-    }
-
-    // Диагностика настройки: только факт наличия, без значений
-    if (url.pathname === "/health") {
-      return Response.json({
-        kv_binding_SUBS: Boolean(env.SUBS),
-        BOT_TOKEN: Boolean(env.BOT_TOKEN),
-        WEBHOOK_SECRET: Boolean(env.WEBHOOK_SECRET),
-        BROADCAST_SECRET: Boolean(env.BROADCAST_SECRET),
-        GH_TOKEN: Boolean(env.GH_TOKEN),
-        GH_REPO: env.GH_REPO || null,
-        OWNER_CHAT_ID: env.OWNER_CHAT_ID || null,
-        STATE_URL: env.STATE_URL || null,
-      });
-    }
-
     if (url.pathname === "/") {
-      if (!env.SUBS) {
-        return new Response(
-          "Не привязано хранилище KV: Settings → Bindings → KV namespace, " +
-          "Variable name должен быть SUBS. Подробности: /health\n",
-          { status: 500 },
-        );
-      }
-      const people = (await subscribers(env)).length;
-      const filters = (await allFilters(env)).length;
-      return new Response(`Трекер квартир жив. Подписчиков: ${people}, личных фильтров: ${filters}\n`);
+      const count = (await subscribers(env)).length;
+      return new Response(`Трекер квартир жив. Подписчиков: ${count}\n`);
     }
 
     return new Response("не найдено", { status: 404 });
-  },
-
-  // расписание Cloudflare: просто просим GitHub запустить проверку
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(
-      triggerCheck(env).then((result) => console.log("cron →", JSON.stringify(result))),
-    );
   },
 };
