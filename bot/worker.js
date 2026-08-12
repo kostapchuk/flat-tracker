@@ -16,12 +16,13 @@
  * Ключи в KV:
  *   subs:<chatId>                  — подписчик
  *   filters:<chatId>               — все личные фильтры человека, одним списком
+ *   index:filters                  — чаты, у которых фильтры есть
  *   msg:<filterId>:<flatId>:<chat> — каким сообщением прислали эту квартиру
  *
- * Почему фильтры лежат одним ключом, а не по ключу на штуку: в KV операция
- * list согласована лишь в конечном счёте, и только что добавленный фильтр
- * мог не попасть в перебор ещё с минуту. Чтение и запись одного ключа такой
- * задержки не дают.
+ * Почему такая схема: в KV операция list согласована лишь в конечном счёте —
+ * только что записанный ключ может не попадать в перебор ещё около минуты.
+ * Поэтому всё, что нужно читать сразу после записи (фильтры человека и список
+ * таких людей), лежит в конкретных ключах и читается через get, а не list.
  *
  * На бесплатном тарифе один запрос может сделать не больше 50 подзапросов,
  * поэтому check.py шлёт по одной карточке за запрос.
@@ -33,11 +34,25 @@ const MAX_FILTERS = 5;
 const DEFAULT_FILTER = "default";
 
 const COMMANDS = [
-  { command: "start", description: "Подписаться на новые квартиры" },
   { command: "list", description: "Что подходит прямо сейчас" },
+  { command: "add", description: "Добавить фильтр — прислать ссылку с сайта" },
   { command: "filters", description: "Мои фильтры" },
+  { command: "del", description: "Удалить фильтр" },
+  { command: "start", description: "Подписаться на новые квартиры" },
   { command: "stop", description: "Отписаться от уведомлений" },
 ];
+
+const HOW_TO_ADD = [
+  "Чтобы добавить фильтр:",
+  "",
+  "1. Открой <a href=\"https://newbor.by/podbor-kvartiry/\">подбор квартир</a> на сайте",
+  "2. Выстави параметры — площадь, дом, цену, отделку, что нужно",
+  "3. Скопируй адрес из строки браузера",
+  "4. Пришли его мне сюда одним сообщением",
+  "",
+  "Можно дописать название в том же сообщении — например, «четырёшки у парка». " +
+    "Тогда я так фильтр и назову.",
+].join("\n");
 
 const INTRO = [
   "Слежу за квартирами в «Новой Боровой» и присылаю новые, как только они появляются в продаже.",
@@ -45,8 +60,9 @@ const INTRO = [
   "<b>Свой фильтр.</b> Собери подборку на newbor.by (площадь, дом, цена, отделка — что угодно) и пришли мне ссылку из адресной строки. Буду следить именно по ней.",
   "Можно добавить до " + MAX_FILTERS + " фильтров. Если своих нет, работает общий: свободные квартиры от 70 м².",
   "",
-  "/list — что подходит прямо сейчас",
+  "/add — добавить фильтр",
   "/filters — мои фильтры",
+  "/list — что подходит прямо сейчас",
   "/stop — отписаться",
 ].join("\n");
 
@@ -170,29 +186,29 @@ async function userFilters(env, chatId) {
   return filters;
 }
 
-function saveFilters(env, chatId, filters) {
-  return env.SUBS.put(`filters:${chatId}`, JSON.stringify(filters));
+async function saveFilters(env, chatId, filters) {
+  await env.SUBS.put(`filters:${chatId}`, JSON.stringify(filters));
+
+  // указатель, чтобы обходиться без list — он отстаёт от записи
+  const stored = await env.SUBS.get("index:filters");
+  const chats = new Set(stored ? JSON.parse(stored) : []);
+  const before = chats.size;
+  filters.length ? chats.add(chatId) : chats.delete(chatId);
+  if (chats.size !== before) {
+    await env.SUBS.put("index:filters", JSON.stringify([...chats]));
+  }
 }
 
 /** Все фильтры всех людей — для проверялки */
 async function allFilters(env) {
+  const stored = await env.SUBS.get("index:filters");
+  const chats = stored ? JSON.parse(stored) : [];
   const filters = [];
-  const listed = await env.SUBS.list({ prefix: "filters:" });
-  for (const key of listed.keys) {
-    const chatId = key.name.slice("filters:".length);
-    const value = await env.SUBS.get(key.name);
+  for (const chatId of chats) {
+    const value = await env.SUBS.get(`filters:${chatId}`);
     for (const filter of value ? JSON.parse(value) : []) {
       filters.push({ id: filter.id, chat_id: chatId, name: filter.name, url: filter.url });
     }
-  }
-  // ещё не переехавшие на новую схему
-  const old = await env.SUBS.list({ prefix: "filter:" });
-  for (const key of old.keys) {
-    const value = await env.SUBS.get(key.name);
-    if (!value) continue;
-    const [, chatId, id] = key.name.split(":");
-    const stored = JSON.parse(value);
-    filters.push({ id, chat_id: chatId, name: stored.name, url: stored.url });
   }
   return filters;
 }
@@ -336,6 +352,11 @@ async function handleUpdate(env, update) {
     return;
   }
 
+  if (command === "/add") {
+    await text(env, chatId, HOW_TO_ADD);
+    return;
+  }
+
   if (command === "/filters") {
     const filters = await userFilters(env, chatId);
     if (!filters.length) {
@@ -343,21 +364,34 @@ async function handleUpdate(env, update) {
         env,
         chatId,
         "Своих фильтров нет — работает общий: свободные квартиры от 70 м², любой дом.\n\n" +
-          "Чтобы добавить свой: собери подборку на newbor.by и пришли мне ссылку " +
-          "из адресной строки. Можно дописать название в том же сообщении.",
+          HOW_TO_ADD,
       );
       return;
     }
     const lines = filters.map((filter, index) =>
-      `${index + 1}. <b>${filter.name}</b>\n<a href="${filter.url}">ссылка</a> · удалить: /del${filter.id}`
+      `${index + 1}. <b>${filter.name}</b>\n<a href="${filter.url}">ссылка</a> · удалить: /del_${filter.id}`
     );
-    await text(env, chatId, "Твои фильтры:\n\n" + lines.join("\n\n"));
+    await text(env, chatId, "Твои фильтры:\n\n" + lines.join("\n\n") +
+      "\n\nДобавить ещё — /add");
     return;
   }
 
-  if (command.startsWith("/del")) {
-    const id = command.slice("/del".length).replace(/^\s+/, "") || body.split(/\s+/)[1];
+  if (command === "/del" || command.startsWith("/del_")) {
     const filters = await userFilters(env, chatId);
+    const id = command.startsWith("/del_")
+      ? command.slice("/del_".length)
+      : (body.split(/\s+/)[1] || "").replace(/^\//, "");
+
+    if (!id) {
+      if (!filters.length) {
+        await text(env, chatId, "Удалять нечего — своих фильтров нет.\n\n" + HOW_TO_ADD);
+        return;
+      }
+      const lines = filters.map((filter) => `• <b>${filter.name}</b> — удалить: /del_${filter.id}`);
+      await text(env, chatId, "Какой фильтр удалить?\n\n" + lines.join("\n"));
+      return;
+    }
+
     const doomed = filters.find((filter) => filter.id === id);
     if (!doomed) {
       await text(env, chatId, "Такого фильтра нет. Список: /filters");
@@ -533,6 +567,11 @@ export default {
       });
       const menu = await api(env, "setMyCommands", { commands: COMMANDS });
       return Response.json({ webhook: await webhook.json(), commands: await menu.json() });
+    }
+
+    if (url.pathname === "/keys" && authorized(env, request, url)) {
+      const listed = await env.SUBS.list();
+      return Response.json({ keys: listed.keys.map((key) => key.name) });
     }
 
     // Диагностика настройки: только факт наличия, без значений

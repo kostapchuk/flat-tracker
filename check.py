@@ -603,6 +603,15 @@ def run(args):
                 log.error("и в Telegram не ушло: %s", exc)
         return 1
 
+    # фильтры, которых в этом обходе не было (бот их не отдал), сохраняем как
+    # есть — иначе при возвращении фильтр посчитается новым и пришлёт всё заново
+    for filter_id, stored in known_filters.items():
+        if filter_id not in fresh_filters:
+            fresh_filters[filter_id] = stored
+            for flat_id in stored.get("ids", []):
+                if flat_id in catalog:
+                    fresh_catalog.setdefault(flat_id, catalog[flat_id])
+
     state["catalog"] = fresh_catalog
     state["filters"] = fresh_filters
     state["fails"] = 0
