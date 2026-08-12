@@ -139,6 +139,20 @@ function text(env, chatId, message) {
   return send(env, chatId, { text: message });
 }
 
+/**
+ * Разбирает отказ на правку сообщения.
+ *   unchanged — текст совпал с текущим, это не ошибка;
+ *   gone      — сообщение удалили или оно старше 48 часов, нужно новое;
+ *   иначе     — временная беда, новое слать не надо, чтобы не плодить дубли.
+ */
+function editFailure(detail) {
+  if (detail.includes("message is not modified")) return "unchanged";
+  if (detail.includes("message to edit not found") ||
+      detail.includes("message can't be edited") ||
+      detail.includes("MESSAGE_ID_INVALID")) return "gone";
+  return "transient";
+}
+
 // ---------------------------------------------------------------------------
 // Подписчики и фильтры
 // ---------------------------------------------------------------------------
@@ -500,8 +514,15 @@ async function handleRetire(env, request) {
       if (response.ok) {
         edited++;
       } else {
-        console.error(`правка ${flat.id} в ${chatId}: ${(await response.text()).slice(0, 160)}`);
-        if ((await text(env, chatId, flat.short)).delivered) sent++;
+        const detail = await response.text();
+        const reason = editFailure(detail);
+        if (reason === "unchanged") {
+          edited++;
+        } else {
+          console.error(`правка ${flat.id} в ${chatId} (${reason}): ${detail.slice(0, 160)}`);
+          // сообщение удалили или уже не отредактировать — говорим отдельно
+          if ((await text(env, chatId, flat.short)).delivered) sent++;
+        }
       }
       await env.SUBS.delete(key.name);
     }
@@ -543,8 +564,13 @@ async function handleHeartbeat(env, request) {
         parse_mode: "HTML",
       });
       if (response.ok) return Response.json({ edited: Number(known) });
-      // сообщение удалили или оно старше 48 часов — заведём новое
-      console.log("табло не отредактировалось, шлю новое");
+
+      const reason = editFailure(await response.text());
+      // текст тот же — Telegram отказывает, но табло и так актуально
+      if (reason === "unchanged") return Response.json({ unchanged: Number(known) });
+      // временная беда: новое слать нельзя, иначе при каждом сбое будет дубль
+      if (reason === "transient") return Response.json({ skipped: Number(known) });
+      console.log("табло удалено или устарело, завожу новое");
     }
     const sent = await text(env, chatId, body);
     if (sent.messageId) await env.SUBS.put(`heartbeat:${chatId}`, String(sent.messageId));
