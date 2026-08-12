@@ -616,6 +616,8 @@ export default {
         BOT_TOKEN: Boolean(env.BOT_TOKEN),
         WEBHOOK_SECRET: Boolean(env.WEBHOOK_SECRET),
         BROADCAST_SECRET: Boolean(env.BROADCAST_SECRET),
+        GH_TOKEN: Boolean(env.GH_TOKEN),
+        GH_REPO: env.GH_REPO || null,
         OWNER_CHAT_ID: env.OWNER_CHAT_ID || null,
         STATE_URL: env.STATE_URL || null,
       });
