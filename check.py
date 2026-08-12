@@ -333,8 +333,10 @@ def format_flat(flat, retired=False):
         lines.append(f"🏢 {esc(flat['floor'])}")
     if props.get("Подъезд"):
         lines.append(f"🚪 Подъезд {esc(props['Подъезд'])}")
-    if props.get("Отделка"):
-        lines.append(f"🧱 {esc(props['Отделка'])}")
+    finish = props.get("Отделка", "")
+    if finish:
+        # в главном блоке важен сам факт, а какая именно отделка — ниже
+        lines.append("🧱 Без отделки" if "без отделки" in finish.lower() else "🧱 С отделкой")
     if props.get("Срок сдачи"):
         lines.append(f"📅 Сдача: {esc(props['Срок сдачи'])}")
 
@@ -345,12 +347,16 @@ def format_flat(flat, retired=False):
         extra.append(f"Стоимость: <b>{esc(price)}</b>")
     if props.get("Комнаты") or flat.get("rooms"):
         extra.append(f"Комнат: {esc(props.get('Комнаты') or flat.get('rooms'))}")
+    if finish and "без отделки" not in finish.lower():
+        extra.append(f"Отделка: {esc(re.sub(r'^Отделка ', '', finish))}")
     if props.get("Расположение"):
         extra.append(f"Квартал: {esc(props['Расположение'])}")
-    if flat.get("badge"):
+    # про отделку уже сказано выше — в особенностях и плашке её не повторяем
+    if flat.get("badge") and "отделк" not in flat["badge"].lower():
         extra.append(esc(flat["badge"]))
-    if flat.get("features"):
-        extra.append("Особенности: " + esc(", ".join(flat["features"])))
+    features = [f for f in flat.get("features", []) if "отделк" not in f.lower()]
+    if features:
+        extra.append("Особенности: " + esc(", ".join(features)))
     for key, value in props.items():  # всё, что не разобрали выше
         if value and key not in ("Комнаты", "Площадь", "Этаж", "Подъезд",
                                  "Расположение", "Отделка", "Срок сдачи"):
