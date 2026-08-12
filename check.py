@@ -9,6 +9,7 @@
 """
 
 import argparse
+import calendar
 import html
 import json
 import logging
@@ -365,6 +366,15 @@ def bot_call(path, payload):
         raise RuntimeError(f"бот ответил {exc.code} на {path}: {body}") from None
 
 
+def as_card(flat):
+    """Квартира в виде, в котором её отправляет бот."""
+    return {
+        "id": flat.get("id", ""),
+        "text": flat.get("text") or format_flat(flat),
+        "photo": flat.get("plan_image", ""),
+    }
+
+
 def bot_configured():
     return bool(os.environ.get("BOT_URL", "").strip()
                 and os.environ.get("BROADCAST_SECRET", "").strip())
@@ -636,6 +646,9 @@ def main():
                         help="показать выдачу общего фильтра и выйти")
     parser.add_argument("--filters", action="store_true",
                         help="показать фильтры, которые придут из бота, и выйти")
+    parser.add_argument("--if-stale", type=int, metavar="МИНУТ", default=0,
+                        help="работать, только если последняя удачная проверка "
+                             "старше этого срока (страхующий запуск)")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -654,6 +667,16 @@ def main():
                header="")
         print(f"Отправлено {where}.")
         return 0
+
+    if args.if_stale:
+        last = load_state().get("last_ok_utc")
+        if last:
+            age = time.time() - calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ"))
+            if age < args.if_stale * 60:
+                log.info("проверка была %d мин назад — уступаю основному расписанию",
+                         age // 60)
+                return 0
+            log.info("последняя проверка %d мин назад — работаю сам", age // 60)
 
     if args.filters:
         for filter_id, url, chats, name in collect_jobs():
