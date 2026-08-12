@@ -6,8 +6,8 @@ name: flat-tracker
 
 on:
   schedule:
-    - cron: "*/5 * * * *"    # каждые 5 минут — это же и скорость ответа на команды бота
-                             # (GitHub может задержать запуск на 5–20 минут)
+    - cron: "*/10 * * * *"   # родное расписание GitHub: ненадёжное и с задержками,
+                             # точность обеспечивает расписание Cloudflare
   repository_dispatch:        # запуск по расписанию Cloudflare
     types: [check]
   workflow_dispatch:          # и кнопка «Run workflow» для проверки вручную
