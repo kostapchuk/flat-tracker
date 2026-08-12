@@ -348,7 +348,27 @@ export default {
       return Response.json({ webhook: await webhook.json(), commands: await menu.json() });
     }
 
+    // Диагностика настройки: только факт наличия, без значений.
+    // Помогает понять, доехали ли до воркера переменные и привязка KV.
+    if (url.pathname === "/health") {
+      return Response.json({
+        kv_binding_SUBS: Boolean(env.SUBS),
+        BOT_TOKEN: Boolean(env.BOT_TOKEN),
+        WEBHOOK_SECRET: Boolean(env.WEBHOOK_SECRET),
+        BROADCAST_SECRET: Boolean(env.BROADCAST_SECRET),
+        OWNER_CHAT_ID: env.OWNER_CHAT_ID || null,
+        STATE_URL: env.STATE_URL || null,
+      });
+    }
+
     if (url.pathname === "/") {
+      if (!env.SUBS) {
+        return new Response(
+          "Не привязано хранилище KV: Settings → Bindings → KV namespace, " +
+          "Variable name должен быть SUBS. Подробности: /health\n",
+          { status: 500 },
+        );
+      }
       const count = (await subscribers(env)).length;
       return new Response(`Трекер квартир жив. Подписчиков: ${count}\n`);
     }
