@@ -158,32 +158,10 @@ async function subscribers(env) {
   return [...ids];
 }
 
-/** Фильтры, оставшиеся от прежней схемы «ключ на фильтр» */
-async function legacyFilters(env, chatId) {
-  const listed = await env.SUBS.list({ prefix: `filter:${chatId}:` });
-  const filters = [];
-  for (const key of listed.keys) {
-    const value = await env.SUBS.get(key.name);
-    if (value) filters.push({ id: key.name.split(":")[2], ...JSON.parse(value) });
-    await env.SUBS.delete(key.name);
-  }
-  return filters;
-}
-
 /** Фильтры одного человека: [{ id, name, url }] */
 async function userFilters(env, chatId) {
   const stored = await env.SUBS.get(`filters:${chatId}`);
-  const filters = stored ? JSON.parse(stored) : [];
-
-  const legacy = await legacyFilters(env, chatId);
-  if (legacy.length) {
-    const known = new Set(filters.map((filter) => filter.url));
-    for (const filter of legacy) {
-      if (!known.has(filter.url)) filters.push(filter);
-    }
-    await saveFilters(env, chatId, filters);
-  }
-  return filters;
+  return stored ? JSON.parse(stored) : [];
 }
 
 async function saveFilters(env, chatId, filters) {
