@@ -42,6 +42,7 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
+BOT_USER_AGENT = "flat-tracker/1.0 (+https://github.com/kostapchuk/flat-tracker)"
 MAX_PAGES = 20
 MAX_PHOTO_MESSAGES = 10  # больше — уже спам, остальное уйдёт списком
 BYN_GLYPH = ""  # символ бел. рубля из шрифта сайта
@@ -347,11 +348,20 @@ def bot_call(path, payload):
     req = urllib.request.Request(
         f"{base}{path}",
         data=json.dumps(payload, ensure_ascii=False).encode(),
-        headers={"content-type": "application/json",
-                 "authorization": f"Bearer {secret}"},
+        headers={
+            "content-type": "application/json",
+            "authorization": f"Bearer {secret}",
+            # без своего User-Agent Cloudflare режет запрос по сигнатуре
+            # клиента (ошибка 1010) — до воркера он даже не доходит
+            "user-agent": BOT_USER_AGENT,
+        },
     )
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        return json.loads(resp.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")[:300]
+        raise RuntimeError(f"бот ответил {exc.code} на {path}: {body}") from None
 
 
 def bot_configured():
