@@ -15,8 +15,13 @@
  *
  * Ключи в KV:
  *   subs:<chatId>                  — подписчик
- *   filter:<chatId>:<filterId>     — личный фильтр (ссылка с сайта)
+ *   filters:<chatId>               — все личные фильтры человека, одним списком
  *   msg:<filterId>:<flatId>:<chat> — каким сообщением прислали эту квартиру
+ *
+ * Почему фильтры лежат одним ключом, а не по ключу на штуку: в KV операция
+ * list согласована лишь в конечном счёте, и только что добавленный фильтр
+ * мог не попасть в перебор ещё с минуту. Чтение и запись одного ключа такой
+ * задержки не дают.
  *
  * На бесплатном тарифе один запрос может сделать не больше 50 подзапросов,
  * поэтому check.py шлёт по одной карточке за запрос.
@@ -137,23 +142,52 @@ async function subscribers(env) {
   return [...ids];
 }
 
-/** Фильтры одного человека: [{ id, name, url }] */
-async function userFilters(env, chatId) {
+/** Фильтры, оставшиеся от прежней схемы «ключ на фильтр» */
+async function legacyFilters(env, chatId) {
   const listed = await env.SUBS.list({ prefix: `filter:${chatId}:` });
   const filters = [];
   for (const key of listed.keys) {
     const value = await env.SUBS.get(key.name);
-    if (!value) continue;
-    filters.push({ id: key.name.split(":")[2], ...JSON.parse(value) });
+    if (value) filters.push({ id: key.name.split(":")[2], ...JSON.parse(value) });
+    await env.SUBS.delete(key.name);
   }
   return filters;
 }
 
+/** Фильтры одного человека: [{ id, name, url }] */
+async function userFilters(env, chatId) {
+  const stored = await env.SUBS.get(`filters:${chatId}`);
+  const filters = stored ? JSON.parse(stored) : [];
+
+  const legacy = await legacyFilters(env, chatId);
+  if (legacy.length) {
+    const known = new Set(filters.map((filter) => filter.url));
+    for (const filter of legacy) {
+      if (!known.has(filter.url)) filters.push(filter);
+    }
+    await saveFilters(env, chatId, filters);
+  }
+  return filters;
+}
+
+function saveFilters(env, chatId, filters) {
+  return env.SUBS.put(`filters:${chatId}`, JSON.stringify(filters));
+}
+
 /** Все фильтры всех людей — для проверялки */
 async function allFilters(env) {
-  const listed = await env.SUBS.list({ prefix: "filter:" });
   const filters = [];
+  const listed = await env.SUBS.list({ prefix: "filters:" });
   for (const key of listed.keys) {
+    const chatId = key.name.slice("filters:".length);
+    const value = await env.SUBS.get(key.name);
+    for (const filter of value ? JSON.parse(value) : []) {
+      filters.push({ id: filter.id, chat_id: chatId, name: filter.name, url: filter.url });
+    }
+  }
+  // ещё не переехавшие на новую схему
+  const old = await env.SUBS.list({ prefix: "filter:" });
+  for (const key of old.keys) {
     const value = await env.SUBS.get(key.name);
     if (!value) continue;
     const [, chatId, id] = key.name.split(":");
@@ -238,10 +272,8 @@ async function addFilter(env, chatId, url, name) {
 
   const id = newFilterId();
   const title = name || `Фильтр ${filters.length + 1}`;
-  await env.SUBS.put(
-    `filter:${chatId}:${id}`,
-    JSON.stringify({ name: title, url, created: new Date().toISOString() }),
-  );
+  filters.push({ id, name: title, url, created: new Date().toISOString() });
+  await saveFilters(env, chatId, filters);
   await subscribe(env, chatId, { since: new Date().toISOString() });
 
   await text(
@@ -325,13 +357,14 @@ async function handleUpdate(env, update) {
 
   if (command.startsWith("/del")) {
     const id = command.slice("/del".length).replace(/^\s+/, "") || body.split(/\s+/)[1];
-    const stored = id && await env.SUBS.get(`filter:${chatId}:${id}`);
-    if (!stored) {
+    const filters = await userFilters(env, chatId);
+    const doomed = filters.find((filter) => filter.id === id);
+    if (!doomed) {
       await text(env, chatId, "Такого фильтра нет. Список: /filters");
       return;
     }
-    await env.SUBS.delete(`filter:${chatId}:${id}`);
-    await text(env, chatId, `🗑 Удалил «${JSON.parse(stored).name}». Остальные: /filters`);
+    await saveFilters(env, chatId, filters.filter((filter) => filter.id !== id));
+    await text(env, chatId, `🗑 Удалил «${doomed.name}». Остальные: /filters`);
     return;
   }
 
