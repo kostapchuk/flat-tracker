@@ -1,7 +1,34 @@
 {
   "fails": 0,
-  "last_ok_utc": "2026-08-12T10:40:54Z",
+  "last_ok_utc": "2026-08-12T13:10:38Z",
   "catalog": {
+    "414311": {
+      "id": "414311",
+      "url": "https://newbor.by/genplan/avia_kvartal/dom_14_3/podezd-4/etazh-5/kvartira_414311/",
+      "title": "Дом № 14.3, кв № 141",
+      "rooms": "4 комнатная",
+      "floor": "5 этаж",
+      "area": "76.97 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "76.97 м2",
+        "Комнаты": "4",
+        "Этаж": "5",
+        "Подъезд": "4",
+        "Отделка": "Без отделки",
+        "Расположение": "Авиаквартал",
+        "Срок сдачи": "4 квартал 2027 г"
+      },
+      "features": [
+        "Мастер-спальня"
+      ],
+      "price_usd": "151708",
+      "price_byn": "447235",
+      "per_m2_usd": "1 971.00 $/м2",
+      "per_m2_byn": "5 810.51 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/656/gzpdoj86s98guvivxko4c8avpy87ablz/602-498-0/4K-76-97.webp",
+      "text": "🏠 <b>Дом 14.3</b>\n📐 <b>76.97 м2</b>\n💵 1 971.00 $/м2 · 5 810.51 BYN/м2\n🔑 Квартира № 141\n🏢 5 этаж\n🚪 Подъезд 4\n🧱 Без отделки\n📅 Сдача: 4 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>151 708 $ / 447 235 BYN</b>\nКомнат: 4\nКвартал: Авиаквартал\nОсобенности: Мастер-спальня\n\n<a href=\"https://newbor.by/genplan/avia_kvartal/dom_14_3/podezd-4/etazh-5/kvartira_414311/\">Открыть на сайте</a>"
+    },
     "413792": {
       "id": "413792",
       "url": "https://newbor.by/genplan/kvartal_tsentralnyy-park/dom_7_84/podezd-1/etazh-4/kvartira_413792/",
@@ -85,6 +112,7 @@
     "default": {
       "url": "https://newbor.by/podbor-kvartiry/?FILTER_NAME=arrFlatFilter&link=main&IBLOCK_ID=29&IBLOCK_SECTION_ID=&booked=hide&arrFlatFilter_139_MIN=70&arrFlatFilter_144_4252452532=Y&set_filter=%D0%9F%D0%BE%D0%BA%D0%B0%D0%B7%D0%B0%D1%82%D1%8C+%D0%BA%D0%B2%D0%B0%D1%80%D1%82%D0%B8%D1%80%D1%8B",
       "ids": [
+        "414311",
         "413792",
         "413431",
         "413435"
