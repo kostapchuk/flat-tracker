@@ -27,7 +27,7 @@ fi
 # как и в воркфлоу: подряд идущие коммиты состояния схлопываем в один
 if git log -1 --pretty=%s | grep -q '^state: ' && [ "$(git log -1 --pretty=%an)" = "flat-tracker" ]; then
     git -c user.name=flat-tracker -c user.email=flat-tracker@users.noreply.github.com \
-        commit --amend -q -m "state: $(date -u +%FT%TZ)"
+        commit --amend -q --date=now -m "state: $(date -u +%FT%TZ)"
     git push --force-with-lease -q
 else
     git -c user.name=flat-tracker -c user.email=flat-tracker@users.noreply.github.com \

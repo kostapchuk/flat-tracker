@@ -73,15 +73,14 @@ jobs:
               | grep -vE '"(updated_utc|fails)"' || true)
 
             if [ -z "$meaningful" ]; then
-              # GitHub отключает расписание в репозиториях без активности
-              # 60 дней, поэтому раз в неделю делаем пустой коммит-пульс
+              # Состав квартир не менялся. Но раз в час всё же обновляем
+              # отметку времени: по репозиторию должно быть видно, что трекер
+              # жив, без похода в Actions. Заодно это держит репозиторий
+              # активным — GitHub отключает расписание после 60 дней тишины.
               age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
-              if [ "$age" -gt 604800 ]; then
-                git reset -q
-                git commit --allow-empty -m "heartbeat: $(date -u +%FT%TZ)"
-                git push origin HEAD:main || continue
+              if [ "$age" -lt 3600 ]; then
+                exit 0
               fi
-              exit 0
             fi
 
             # если предыдущий коммит — тоже состояние, дополняем его вместо
@@ -91,7 +90,9 @@ jobs:
             if [ "$(git rev-parse --is-shallow-repository)" = "false" ] \
                && git log -1 --pretty=%s | grep -q '^state: ' \
                && [ "$(git log -1 --pretty=%an)" = "flat-tracker" ]; then
-              git commit --amend -m "state: $(date -u +%FT%TZ)"
+              # --date=now обязателен: без него правка сохраняет исходную дату
+              # автора, и GitHub показывает старое время у свежего коммита
+              git commit --amend --date=now -m "state: $(date -u +%FT%TZ)"
               git push --force-with-lease origin HEAD:main && exit 0
             else
               git commit -m "state: $(date -u +%FT%TZ)"
