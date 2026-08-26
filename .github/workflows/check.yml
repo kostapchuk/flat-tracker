@@ -5,9 +5,6 @@
 name: flat-tracker
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"   # родное расписание GitHub: ненадёжное и с задержками,
-                             # точность обеспечивает расписание Cloudflare
   repository_dispatch:        # запуск по расписанию Cloudflare
     types: [check]
   workflow_dispatch:          # и кнопка «Run workflow» для проверки вручную
@@ -75,8 +72,7 @@ jobs:
             if [ -z "$meaningful" ]; then
               # Состав квартир не менялся. Но раз в час всё же обновляем
               # отметку времени: по репозиторию должно быть видно, что трекер
-              # жив, без похода в Actions. Заодно это держит репозиторий
-              # активным — GitHub отключает расписание после 60 дней тишины.
+              # жив, без похода в Actions.
               age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
               if [ "$age" -lt 3600 ]; then
                 exit 0
