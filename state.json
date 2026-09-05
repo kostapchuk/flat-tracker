@@ -2,30 +2,161 @@
   "fails": 0,
   "last_ok_utc": "2026-08-12T15:40:41Z",
   "catalog": {
-    "413435": {
-      "id": "413435",
-      "url": "https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413435/",
-      "title": "Дом № 1.6, кв № 60",
+    "414378": {
+      "id": "414378",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-1/etazh-3/kvartira_414378/",
+      "title": "Дом № 1.3, кв № 20",
       "rooms": "4 комнатная",
-      "floor": "2 этаж",
-      "area": "83.07 м2",
+      "floor": "3 этаж",
+      "area": "78.23 м2",
       "badge": "",
       "props": {
-        "Площадь": "83.07 м2",
+        "Площадь": "78.23 м2",
         "Комнаты": "4",
-        "Этаж": "2",
-        "Подъезд": "3",
+        "Этаж": "3",
+        "Подъезд": "1",
         "Отделка": "Без отделки",
         "Расположение": "АРТ-квартал",
-        "Срок сдачи": "2 квартал 2027 г"
+        "Срок сдачи": "1 квартал 2028 г"
       },
       "features": [],
-      "price_usd": "169463",
-      "price_byn": "511015",
-      "per_m2_usd": "2 040.00 $/м2",
-      "per_m2_byn": "6 151.62 BYN/м2",
-      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/caf/d33t7b7eqx5njfzkdufi9o64b4ww6irf/602-498-0/4K-83-07.webp",
-      "text": "🏠 <b>Дом 1.6</b>\n📐 <b>83.07 м2</b>\n💵 2 040.00 $/м2 · 6 151.62 BYN/м2\n🔑 Квартира № 60\n🏢 2 этаж\n🚪 Подъезд 3\n🧱 Без отделки\n📅 Сдача: 2 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>169 463 $ / 511 015 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413435/\">Открыть на сайте</a>"
+      "price_usd": "193932",
+      "price_byn": "597156",
+      "per_m2_usd": "2 479.00 $/м2",
+      "per_m2_byn": "7 633.34 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/38c/3ytrfc2xoimk7l8h2474toe28biqkump/602-498-0/4K-78-23.webp",
+      "text": "🏠 <b>Дом 1.3</b>\n📐 <b>78.23 м2</b>\n💵 2 479.00 $/м2 · 7 633.34 BYN/м2\n🔑 Квартира № 20\n🏢 3 этаж\n🚪 Подъезд 1\n🧱 Без отделки\n📅 Сдача: 1 квартал 2028 г\n\n<b>Дополнительно</b>\nСтоимость: <b>193 932 $ / 597 156 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-1/etazh-3/kvartira_414378/\">Открыть на сайте</a>"
+    },
+    "413822": {
+      "id": "413822",
+      "url": "https://newbor.by/genplan/avia_kvartal/dom_14_7/podezd-2/etazh-1/kvartira_413822/",
+      "title": "Дом № 14.7, кв № 24",
+      "rooms": "4 комнатная",
+      "floor": "1 этаж",
+      "area": "100.80 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "100.80 м2",
+        "Комнаты": "4",
+        "Этаж": "1",
+        "Подъезд": "2",
+        "Отделка": "Без отделки",
+        "Расположение": "Авиа-квартал",
+        "Срок сдачи": "2 квартал 2027 г"
+      },
+      "features": [
+        "Терраса"
+      ],
+      "price_usd": "198576",
+      "price_byn": "611455",
+      "per_m2_usd": "1 970.00 $/м2",
+      "per_m2_byn": "6 066.02 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/b86/1k5myy6qu7ahvybhqbhi26c6e2b6uip4/602-498-0/4K-100-80.webp",
+      "text": "🏠 <b>Дом 14.7</b>\n📐 <b>100.80 м2</b>\n💵 1 970.00 $/м2 · 6 066.02 BYN/м2\n🔑 Квартира № 24\n🏢 1 этаж\n🚪 Подъезд 2\n🧱 Без отделки\n📅 Сдача: 2 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>198 576 $ / 611 455 BYN</b>\nКомнат: 4\nКвартал: Авиа-квартал\nОсобенности: Терраса\n\n<a href=\"https://newbor.by/genplan/avia_kvartal/dom_14_7/podezd-2/etazh-1/kvartira_413822/\">Открыть на сайте</a>"
+    },
+    "414493": {
+      "id": "414493",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-4/etazh-3/kvartira_414493/",
+      "title": "Дом № 1.3, кв № 135",
+      "rooms": "4 комнатная",
+      "floor": "3 этаж",
+      "area": "77.63 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "77.63 м2",
+        "Комнаты": "4",
+        "Этаж": "3",
+        "Подъезд": "4",
+        "Отделка": "Без отделки",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "1 квартал 2028 г"
+      },
+      "features": [
+        "2 санузла"
+      ],
+      "price_usd": "206418",
+      "price_byn": "635603",
+      "per_m2_usd": "2 659.00 $/м2",
+      "per_m2_byn": "8 187.59 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/eb3/4xp6lxncoouo95ey5gguooynzrcm8q3r/602-498-0/4K-77-63-2.webp",
+      "text": "🏠 <b>Дом 1.3</b>\n📐 <b>77.63 м2</b>\n💵 2 659.00 $/м2 · 8 187.59 BYN/м2\n🔑 Квартира № 135\n🏢 3 этаж\n🚪 Подъезд 4\n🧱 Без отделки\n📅 Сдача: 1 квартал 2028 г\n\n<b>Дополнительно</b>\nСтоимость: <b>206 418 $ / 635 603 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\nОсобенности: 2 санузла\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-4/etazh-3/kvartira_414493/\">Открыть на сайте</a>"
+    },
+    "414489": {
+      "id": "414489",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-4/etazh-3/kvartira_414489/",
+      "title": "Дом № 1.3, кв № 131",
+      "rooms": "4 комнатная",
+      "floor": "3 этаж",
+      "area": "77.63 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "77.63 м2",
+        "Комнаты": "4",
+        "Этаж": "3",
+        "Подъезд": "4",
+        "Отделка": "Без отделки",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "1 квартал 2028 г"
+      },
+      "features": [
+        "2 санузла"
+      ],
+      "price_usd": "206418",
+      "price_byn": "635603",
+      "per_m2_usd": "2 659.00 $/м2",
+      "per_m2_byn": "8 187.59 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/128/r2r2l3vg7lh2a16j78fgawa84d8wmgfl/602-498-0/4K-77-63.webp",
+      "text": "🏠 <b>Дом 1.3</b>\n📐 <b>77.63 м2</b>\n💵 2 659.00 $/м2 · 8 187.59 BYN/м2\n🔑 Квартира № 131\n🏢 3 этаж\n🚪 Подъезд 4\n🧱 Без отделки\n📅 Сдача: 1 квартал 2028 г\n\n<b>Дополнительно</b>\nСтоимость: <b>206 418 $ / 635 603 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\nОсобенности: 2 санузла\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-4/etazh-3/kvartira_414489/\">Открыть на сайте</a>"
+    },
+    "414504": {
+      "id": "414504",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-4/etazh-6/kvartira_414504/",
+      "title": "Дом № 1.3, кв № 146",
+      "rooms": "4 комнатная",
+      "floor": "6 этаж",
+      "area": "78.40 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "78.40 м2",
+        "Комнаты": "4",
+        "Этаж": "6",
+        "Подъезд": "4",
+        "Отделка": "Без отделки",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "1 квартал 2028 г"
+      },
+      "features": [],
+      "price_usd": "212307",
+      "price_byn": "653736",
+      "per_m2_usd": "2 708.00 $/м2",
+      "per_m2_byn": "8 338.47 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/847/r1o03bptqz5ffizfd4yc6sie5cgcpqtr/602-498-0/4K-78-40.webp",
+      "text": "🏠 <b>Дом 1.3</b>\n📐 <b>78.40 м2</b>\n💵 2 708.00 $/м2 · 8 338.47 BYN/м2\n🔑 Квартира № 146\n🏢 6 этаж\n🚪 Подъезд 4\n🧱 Без отделки\n📅 Сдача: 1 квартал 2028 г\n\n<b>Дополнительно</b>\nСтоимость: <b>212 307 $ / 653 736 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-4/etazh-6/kvartira_414504/\">Открыть на сайте</a>"
+    },
+    "414419": {
+      "id": "414419",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-2/etazh-2/kvartira_414419/",
+      "title": "Дом № 1.3, кв № 61",
+      "rooms": "4 комнатная",
+      "floor": "2 этаж",
+      "area": "78.58 м2",
+      "badge": "Квартира с отделкой",
+      "props": {
+        "Площадь": "78.58 м2",
+        "Комнаты": "4",
+        "Этаж": "2",
+        "Подъезд": "2",
+        "Отделка": "Отделка Копенгаген",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "1 квартал 2028 г"
+      },
+      "features": [],
+      "price_usd": "225760",
+      "price_byn": "695161",
+      "per_m2_usd": "2 873.00 $/м2",
+      "per_m2_byn": "8 846.54 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/786/rtqc7vg28mu1qxfzkoimyxin0nt83p6f/602-498-0/4K-78-58.webp",
+      "text": "🏠 <b>Дом 1.3</b>\n📐 <b>78.58 м2</b>\n💵 2 873.00 $/м2 · 8 846.54 BYN/м2\n🔑 Квартира № 61\n🏢 2 этаж\n🚪 Подъезд 2\n🧱 С отделкой\n📅 Сдача: 1 квартал 2028 г\n\n<b>Дополнительно</b>\nСтоимость: <b>225 760 $ / 695 161 BYN</b>\nКомнат: 4\nОтделка: Копенгаген\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-2/etazh-2/kvartira_414419/\">Открыть на сайте</a>"
     },
     "414198": {
       "id": "414198",
@@ -48,11 +179,65 @@
         "Квартиры с отделкой"
       ],
       "price_usd": "233939",
-      "price_byn": "705444",
+      "price_byn": "720346",
       "per_m2_usd": "2 296.00 $/м2",
-      "per_m2_byn": "6 923.59 BYN/м2",
+      "per_m2_byn": "7 069.84 BYN/м2",
       "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/bb0/ibt3aaok23r1l6hajj9vzkjlxnywq3r9/602-498-0/4K-101-89-obnov.webp",
-      "text": "🏠 <b>Дом 14.3</b>\n📐 <b>101.89 м2</b>\n💵 2 296.00 $/м2 · 6 923.59 BYN/м2\n🔑 Квартира № 28\n🏢 1 этаж\n🚪 Подъезд 2\n🧱 С отделкой\n📅 Сдача: 4 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>233 939 $ / 705 444 BYN</b>\nКомнат: 4\nОтделка: White box\nКвартал: Авиа-квартал\n\n<a href=\"https://newbor.by/genplan/avia_kvartal/dom_14_3/podezd-2/etazh-1/kvartira_414198/\">Открыть на сайте</a>"
+      "text": "🏠 <b>Дом 14.3</b>\n📐 <b>101.89 м2</b>\n💵 2 296.00 $/м2 · 7 069.84 BYN/м2\n🔑 Квартира № 28\n🏢 1 этаж\n🚪 Подъезд 2\n🧱 С отделкой\n📅 Сдача: 4 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>233 939 $ / 720 346 BYN</b>\nКомнат: 4\nОтделка: White box\nКвартал: Авиа-квартал\n\n<a href=\"https://newbor.by/genplan/avia_kvartal/dom_14_3/podezd-2/etazh-1/kvartira_414198/\">Открыть на сайте</a>"
+    },
+    "414426": {
+      "id": "414426",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-2/etazh-3/kvartira_414426/",
+      "title": "Дом № 1.3, кв № 68",
+      "rooms": "4 комнатная",
+      "floor": "3 этаж",
+      "area": "78.58 м2",
+      "badge": "Квартира с отделкой",
+      "props": {
+        "Площадь": "78.58 м2",
+        "Комнаты": "4",
+        "Этаж": "3",
+        "Подъезд": "2",
+        "Отделка": "Отделка Копенгаген",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "1 квартал 2028 г"
+      },
+      "features": [],
+      "price_usd": "234889",
+      "price_byn": "723271",
+      "per_m2_usd": "2 989.17 $/м2",
+      "per_m2_byn": "9 204.25 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/89b/23qtkl81bpl3aecvhmo2sajla7l92x1z/602-498-0/4K-78-58.webp",
+      "text": "🏠 <b>Дом 1.3</b>\n📐 <b>78.58 м2</b>\n💵 2 989.17 $/м2 · 9 204.25 BYN/м2\n🔑 Квартира № 68\n🏢 3 этаж\n🚪 Подъезд 2\n🧱 С отделкой\n📅 Сдача: 1 квартал 2028 г\n\n<b>Дополнительно</b>\nСтоимость: <b>234 889 $ / 723 271 BYN</b>\nКомнат: 4\nОтделка: Копенгаген\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-2/etazh-3/kvartira_414426/\">Открыть на сайте</a>"
+    },
+    "414452": {
+      "id": "414452",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-3/etazh-2/kvartira_414452/",
+      "title": "Дом № 1.3, кв № 94",
+      "rooms": "5 комнатная",
+      "floor": "2 этаж",
+      "area": "102.78 м2",
+      "badge": "Квартира с отделкой",
+      "props": {
+        "Площадь": "102.78 м2",
+        "Комнаты": "5",
+        "Этаж": "2",
+        "Подъезд": "3",
+        "Отделка": "",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "1 квартал 2028 г"
+      },
+      "features": [
+        "3 санузла",
+        "Гардеробная/кладовая",
+        "Мастер-спальня"
+      ],
+      "price_usd": "296623",
+      "price_byn": "913362",
+      "per_m2_usd": "2 886.00 $/м2",
+      "per_m2_byn": "8 886.57 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/c2c/ugxyqk9y720svhqe7iyhpt40qsfmmnma/602-498-0/5K-102-78-kv-94.webp",
+      "text": "🏠 <b>Дом 1.3</b>\n📐 <b>102.78 м2</b>\n💵 2 886.00 $/м2 · 8 886.57 BYN/м2\n🔑 Квартира № 94\n🏢 2 этаж\n🚪 Подъезд 3\n📅 Сдача: 1 квартал 2028 г\n\n<b>Дополнительно</b>\nСтоимость: <b>296 623 $ / 913 362 BYN</b>\nКомнат: 5\nКвартал: АРТ-квартал\nОсобенности: 3 санузла, Гардеробная/кладовая, Мастер-спальня\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_3/podezd-3/etazh-2/kvartira_414452/\">Открыть на сайте</a>"
     },
     "413431": {
       "id": "413431",
@@ -78,14 +263,46 @@
       "per_m2_byn": "6 085.12 BYN/м2",
       "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/a31/ao9r7t88w7unnnhk5qbc4e3lioprx6w8/602-498-0/4K-82-89.webp",
       "text": "🏠 <b>Дом 1.6</b>\n📐 <b>82.89 м2</b>\n💵 2 040.00 $/м2 · 6 085.12 BYN/м2\n🔑 Квартира № 56\n🏢 2 этаж\n🚪 Подъезд 3\n🧱 Без отделки\n📅 Сдача: 2 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>169 096 $ / 504 395 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413431/\">Открыть на сайте</a>"
+    },
+    "413435": {
+      "id": "413435",
+      "url": "https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413435/",
+      "title": "Дом № 1.6, кв № 60",
+      "rooms": "4 комнатная",
+      "floor": "2 этаж",
+      "area": "83.07 м2",
+      "badge": "",
+      "props": {
+        "Площадь": "83.07 м2",
+        "Комнаты": "4",
+        "Этаж": "2",
+        "Подъезд": "3",
+        "Отделка": "Без отделки",
+        "Расположение": "АРТ-квартал",
+        "Срок сдачи": "2 квартал 2027 г"
+      },
+      "features": [],
+      "price_usd": "169463",
+      "price_byn": "520030",
+      "per_m2_usd": "2 040.00 $/м2",
+      "per_m2_byn": "6 260.15 BYN/м2",
+      "plan_image": "https://newbor.by/upload/webp/100/upload/resize-cache/iblock/caf/d33t7b7eqx5njfzkdufi9o64b4ww6irf/602-498-0/4K-83-07.webp",
+      "text": "🏠 <b>Дом 1.6</b>\n📐 <b>83.07 м2</b>\n💵 2 040.00 $/м2 · 6 260.15 BYN/м2\n🔑 Квартира № 60\n🏢 2 этаж\n🚪 Подъезд 3\n🧱 Без отделки\n📅 Сдача: 2 квартал 2027 г\n\n<b>Дополнительно</b>\nСтоимость: <b>169 463 $ / 520 030 BYN</b>\nКомнат: 4\nКвартал: АРТ-квартал\n\n<a href=\"https://newbor.by/genplan/art_kvartal/dom_1_6/podezd-3/etazh-2/kvartira_413435/\">Открыть на сайте</a>"
     }
   },
   "filters": {
     "default": {
       "url": "https://newbor.by/podbor-kvartiry/?FILTER_NAME=arrFlatFilter&link=main&IBLOCK_ID=29&IBLOCK_SECTION_ID=&booked=hide&arrFlatFilter_139_MIN=70&arrFlatFilter_144_4252452532=Y&set_filter=%D0%9F%D0%BE%D0%BA%D0%B0%D0%B7%D0%B0%D1%82%D1%8C+%D0%BA%D0%B2%D0%B0%D1%80%D1%82%D0%B8%D1%80%D1%8B",
       "ids": [
-        "413435",
-        "414198"
+        "414378",
+        "413822",
+        "414493",
+        "414489",
+        "414504",
+        "414419",
+        "414198",
+        "414426",
+        "414452"
       ],
       "misses": {}
     },
@@ -97,5 +314,5 @@
       ]
     }
   },
-  "updated_utc": "2026-08-26T14:11:14Z"
+  "updated_utc": "2026-09-05T20:11:07Z"
 }
